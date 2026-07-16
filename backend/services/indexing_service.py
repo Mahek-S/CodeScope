@@ -6,8 +6,11 @@ This is the single place that turns "a repo on disk" into FileNode +
 Dependency rows. Both the manual sync endpoint and the push-event webhook
 call into `index_repository` so there's exactly one indexing code path.
 
-Embedding generation (Day 4) is intentionally not triggered from here —
-that's a separate Celery task chained after indexing completes.
+Embedding generation is a separate function, `generate_project_embeddings`,
+run as its own Celery task after `index_repository` completes. It's kept
+separate rather than folded into the AST-parsing pass because it has a
+different cost profile (model inference vs. filesystem/AST work) and a
+different failure mode worth retrying independently.
 """
 
 import logging
@@ -21,6 +24,7 @@ from models.dependency import Dependency
 from models.file_node import FileNode
 from models.organization import Organization
 from models.project import Project
+from utils.embeddings import file_summary_text, generate_embeddings_batch
 from utils.git_ops import GitOpsError, clone_repository, discover_python_files
 from utils.parser import ParsedFile, parse_python_file, resolve_import_to_filepaths, build_module_index
 
@@ -239,3 +243,37 @@ def _delete_stale_file_nodes(db: Session, project: Project, current_relative_pat
     )
     for file_node in stale:
         db.delete(file_node)
+
+
+def generate_project_embeddings(db: Session, project: Project) -> dict:
+    """
+    (Re)generate the file-level embedding for every FileNode in a project.
+
+    Embeddings are recomputed for the whole project on every run rather
+    than diffed against `content_hash`, matching the same "full rebuild
+    is simple and correct at V1 repo sizes" call made for dependency
+    edges in `index_repository`. This function does not talk to git or
+    parse anything — it assumes `index_repository` has already run and
+    FileNode rows exist; it only turns each row into a stored vector.
+    """
+    file_nodes = (
+        db.query(FileNode)
+        .filter(FileNode.project_id == project.id)
+        .all()
+    )
+
+    if not file_nodes:
+        return {"files_embedded": 0}
+
+    summaries = [
+        file_summary_text(fn.filepath, fn.classes or [], fn.functions or [])
+        for fn in file_nodes
+    ]
+    vectors = generate_embeddings_batch(summaries)
+
+    for file_node, vector in zip(file_nodes, vectors):
+        file_node.embedding = vector
+
+    db.commit()
+
+    return {"files_embedded": len(file_nodes)}

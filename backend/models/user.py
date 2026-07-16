@@ -8,6 +8,11 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from database import Base
 from models.types import EncryptedString
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .organization import Organization
+    from .Membership import Membership
 
 class User(Base):
     __tablename__ = "users"

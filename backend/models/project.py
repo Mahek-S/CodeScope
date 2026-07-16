@@ -7,6 +7,16 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from database import Base
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .organization import Organization
+    from .file_node import FileNode
+    from .dependency import Dependency
+    from .commit import Commit
+    from .pull_request import PullRequest
+    from .analysis import Analysis
+
 
 class Project(Base):
     __tablename__ = "projects"

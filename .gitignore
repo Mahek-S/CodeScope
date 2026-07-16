@@ -1,8 +1,19 @@
+# Environment
 .env
 .env.example
+venv/
 .venv/
+
+# Python
 __pycache__/
-*.pyc
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.pyre/
 
 # IDE
 .vscode/

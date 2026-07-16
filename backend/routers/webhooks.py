@@ -27,7 +27,7 @@ async def github_webhook(request: Request, db: Session = Depends(get_db)):
     if not project:
         return {"status": "ignored", "reason": "unknown repository"}
 
-    if not verify_github_signature(payload_body, signature, settings.github_webhook_secret):
+    if not verify_github_signature(payload_body=payload_body,secret=settings.github_webhook_secret,signature_header=signature):
         raise HTTPException(401, "Invalid webhook signature")
 
     current_full_name = payload["repository"]["full_name"]

@@ -3,7 +3,10 @@ Celery tasks for the indexing pipeline.
 
 Both the manual sync task and the push-event task run the same full
 index (see indexing_service.index_repository) — see that module's
-docstring for why push events re-clone rather than diff.
+docstring for why push events re-clone rather than diff. Both also
+chain into `generate_embeddings` once indexing succeeds, so a fresh
+FileNode always gets a fresh vector without either caller needing to
+know embeddings exist.
 """
 
 import logging
@@ -11,7 +14,11 @@ from datetime import datetime, timezone
 
 from database import SessionLocal
 from models.project import Project
-from services.indexing_service import IndexingError, index_repository
+from services.indexing_service import (
+    IndexingError,
+    generate_project_embeddings,
+    index_repository,
+)
 from workers.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
@@ -34,6 +41,13 @@ def _run_full_index(project_id: str) -> dict:
             "Indexed project %s: %s files, %s dependency edges",
             project_id, result["files_indexed"], result["dependency_edges"],
         )
+
+        # Embeddings are generated as a separate, independently-retried
+        # task rather than inline here — AST parsing and model inference
+        # have different failure modes, and this keeps indexing fast even
+        # if embedding generation is slow or backed up.
+        generate_embeddings.delay(project_id)
+
         return {"status": "completed", "project_id": project_id, **result}
     finally:
         db.close()
@@ -55,12 +69,30 @@ def parse_repository(self, project_id: str):
 @celery_app.task(name="indexing.generate_embeddings", bind=True, max_retries=3)
 def generate_embeddings(self, project_id: str):
     """
-    Generate sentence-transformer embeddings for all indexed files
-    and store them in pgvector.
-    Implemented Day 4.
+    Generate sentence-transformer embeddings for every FileNode in the
+    project and store them in pgvector. Runs after `parse_repository` /
+    `process_push_event` complete — see `_run_full_index`.
     """
-    # TODO Day 4
-    return {"status": "queued", "project_id": project_id}
+    db = SessionLocal()
+    try:
+        project = db.query(Project).filter(Project.id == project_id).first()
+        if not project:
+            logger.warning("Embedding skipped: project %s not found", project_id)
+            return {"status": "skipped", "reason": "project not found", "project_id": project_id}
+
+        result = generate_project_embeddings(db, project)
+
+        logger.info(
+            "Embedded project %s: %s files",
+            project_id, result["files_embedded"],
+        )
+        return {"status": "completed", "project_id": project_id, **result}
+    except Exception as e:
+        db.rollback()
+        logger.error("Embedding generation failed for project %s: %s", project_id, e)
+        raise self.retry(exc=e, countdown=30)
+    finally:
+        db.close()
 
 
 @celery_app.task(name="indexing.process_push_event", bind=True, max_retries=3)

@@ -1,7 +1,14 @@
 """
 sentence-transformers wrapper for generating file-level embeddings.
-Model: all-MiniLM-L6-v2 — 384-dimensional, fast, runs locally.
-Full implementation on Day 4.
+Model: all-MiniLM-L6-v2 -- 384-dimensional, fast, runs locally.
+
+All model-loading lives here and nowhere else. SentenceTransformer is
+expensive to construct (loads weights off disk), so the model is created
+once per worker process via lru_cache and reused for every embedding
+call after that. Callers (indexing_service, search_service) never touch
+the model directly -- they only call generate_embedding /
+generate_embeddings_batch, so swapping the underlying model later is a
+one-file change.
 """
 from __future__ import annotations
 
@@ -11,6 +18,8 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from sentence_transformers import SentenceTransformer
 
+EMBEDDING_DIM = 384  # must match FileNode.embedding's Vector(384) column
+
 
 @lru_cache(maxsize=1)
 def _get_model() -> "SentenceTransformer":
@@ -19,15 +28,17 @@ def _get_model() -> "SentenceTransformer":
     return SentenceTransformer("all-MiniLM-L6-v2")
 
 
-def embed_text(text: str) -> list[float]:
+def generate_embedding(text: str) -> list[float]:
     """Generate a 384-dim embedding for a single text input."""
     model = _get_model()
     vector = model.encode(text, normalize_embeddings=True)
     return vector.tolist()
 
 
-def embed_batch(texts: list[str]) -> list[list[float]]:
+def generate_embeddings_batch(texts: list[str]) -> list[list[float]]:
     """Generate embeddings for a batch of texts (more efficient than looping)."""
+    if not texts:
+        return []
     model = _get_model()
     vectors = model.encode(texts, normalize_embeddings=True, batch_size=32)
     return [v.tolist() for v in vectors]

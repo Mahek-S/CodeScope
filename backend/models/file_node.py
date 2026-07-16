@@ -8,6 +8,12 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from database import Base
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .project import Project
+    from .dependency import Dependency
+
 EMBEDDING_DIM = 384  # sentence-transformers all-MiniLM-L6-v2 output dimension
 
 
