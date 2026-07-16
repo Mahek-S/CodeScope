@@ -18,9 +18,16 @@ from pathlib import Path
 
 
 @dataclass
+class ImportRecord:
+    module: str | None  # e.g., 'ai' or 'utils' or None (for pure relative like `from . import x`)
+    names: list[str]    # the imported names/submodules, e.g. ['nodes'] or ['x']
+    level: int          # relative level: 0 for absolute import, >0 for relative imports (the number of dots)
+
+
+@dataclass
 class ParsedFile:
     filepath: str
-    imports: list[str] = field(default_factory=list)   # module strings as written
+    imports: list[ImportRecord] = field(default_factory=list)
     classes: list[str] = field(default_factory=list)
     functions: list[str] = field(default_factory=list)
     exports: list[str] = field(default_factory=list)
@@ -51,11 +58,18 @@ def parse_python_file(filepath: str, source: str) -> ParsedFile:
         # Imports
         if isinstance(node, ast.Import):
             for alias in node.names:
-                result.imports.append(alias.name)
+                result.imports.append(
+                    ImportRecord(module=alias.name, names=[], level=0)
+                )
 
         elif isinstance(node, ast.ImportFrom):
-            if node.module:
-                result.imports.append(node.module)
+            result.imports.append(
+                ImportRecord(
+                    module=node.module,
+                    names=[alias.name for alias in node.names],
+                    level=node.level or 0,
+                )
+            )
 
         # Top-level classes
         elif isinstance(node, ast.ClassDef):
@@ -78,35 +92,129 @@ def parse_python_file(filepath: str, source: str) -> ParsedFile:
     return result
 
 
-def resolve_import_to_filepath(
-    import_str: str,
+def get_module_names_for_filepath(filepath: str) -> list[str]:
+    # Replace backslashes with forward slashes for safety
+    filepath = filepath.replace("\\", "/")
+    path_obj = Path(filepath)
+    parts = list(path_obj.parts)
+    if not parts:
+        return []
+
+    # Strip extension or init filename
+    if parts[-1] == "__init__.py":
+        parts = parts[:-1]
+    else:
+        if parts[-1].endswith(".py"):
+            parts[-1] = parts[-1][:-3]
+
+    # Generate suffixes (sub-paths)
+    candidates = []
+    for i in range(len(parts)):
+        candidates.append(".".join(parts[i:]))
+    return candidates
+
+
+def build_module_index(all_filepaths: set[str]) -> dict[str, list[str]]:
+    module_index = {}
+    for f in all_filepaths:
+        # Generate all dotted module names for f
+        names = get_module_names_for_filepath(f)
+        for name in names:
+            if name not in module_index:
+                module_index[name] = []
+            module_index[name].append(f)
+    return module_index
+
+
+def resolve_import_to_filepaths(
+    import_rec: ImportRecord,
     source_filepath: str,
     all_filepaths: set[str],
-) -> str | None:
+    module_index: dict[str, list[str]] | None = None,
+) -> list[str]:
     """
-    Attempt to resolve an import string to a relative filepath in the repo.
-
-    Example:
-        import_str      = "services.user_service"
-        source_filepath = "routers/auth.py"
-        → returns "services/user_service.py" if it exists in all_filepaths
-
-    Returns None if the import cannot be resolved to a known file (e.g. third-party).
+    Attempt to resolve an ImportRecord to one or more relative filepaths in the repo.
     """
-    # Convert dotted module path to filepath
-    candidate = import_str.replace(".", "/") + ".py"
-    if candidate in all_filepaths:
-        return candidate
+    if import_rec.level > 0:
+        # Relative import
+        candidates = []
+        try:
+            base_dir = Path(source_filepath).parent
+            for _ in range(import_rec.level - 1):
+                base_dir = base_dir.parent
+        except ValueError:
+            # Went too far up, invalid relative import
+            return []
 
-    # Try package __init__
-    candidate_init = import_str.replace(".", "/") + "/__init__.py"
-    if candidate_init in all_filepaths:
-        return candidate_init
+        if import_rec.module:
+            target_dir = base_dir / import_rec.module.replace(".", "/")
+        else:
+            target_dir = base_dir
 
-    # Relative import from same directory
-    base_dir = str(Path(source_filepath).parent)
-    candidate_rel = f"{base_dir}/{import_str.replace('.', '/')}.py"
-    if candidate_rel in all_filepaths:
-        return candidate_rel
+        # 1. Try target_dir itself (if module was specified)
+        if import_rec.module:
+            candidates.append(target_dir)
 
-    return None
+        # 2. Try submodules based on names
+        for name in import_rec.names:
+            candidates.append(target_dir / name)
+
+        resolved = []
+        for c in candidates:
+            py_file = c.with_suffix(".py").as_posix()
+            init_file = (c / "__init__.py").as_posix()
+
+            # Clean up any potential "./" prefix
+            if py_file.startswith("./"):
+                py_file = py_file[2:]
+            if init_file.startswith("./"):
+                init_file = init_file[2:]
+
+            if py_file in all_filepaths:
+                resolved.append(py_file)
+            if init_file in all_filepaths:
+                resolved.append(init_file)
+
+        return list(dict.fromkeys(resolved))
+
+    else:
+        # Absolute import
+        resolved = []
+        if not module_index:
+            # Fallback if no module_index is provided (e.g. legacy or simple testing)
+            candidates = []
+            if import_rec.module:
+                mod_p = import_rec.module.replace(".", "/")
+                candidates.append(Path(mod_p))
+                for name in import_rec.names:
+                    sub_mod_p = f"{import_rec.module}.{name}".replace(".", "/")
+                    candidates.append(Path(sub_mod_p))
+
+            for c in candidates:
+                py_file = c.with_suffix(".py").as_posix()
+                init_file = (c / "__init__.py").as_posix()
+
+                if py_file.startswith("./"):
+                    py_file = py_file[2:]
+                if init_file.startswith("./"):
+                    init_file = init_file[2:]
+
+                if py_file in all_filepaths:
+                    resolved.append(py_file)
+                if init_file in all_filepaths:
+                    resolved.append(init_file)
+            return list(dict.fromkeys(resolved))
+
+        # We have a module_index! Look up the module and any submodules based on names.
+        if import_rec.module:
+            # 1. Try the module itself
+            if import_rec.module in module_index:
+                resolved.extend(module_index[import_rec.module])
+
+            # 2. Try submodules based on names
+            for name in import_rec.names:
+                sub_mod = f"{import_rec.module}.{name}"
+                if sub_mod in module_index:
+                    resolved.extend(module_index[sub_mod])
+
+        return list(dict.fromkeys(resolved))

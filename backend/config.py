@@ -16,6 +16,10 @@ class Settings(BaseSettings):
     github_client_secret: str
     github_webhook_secret: str
 
+    # Public URL this backend is reachable at, used to register the
+    # GitHub webhook (e.g. an ngrok URL in dev, your real domain in prod).
+    public_base_url: str = "http://localhost:8000"
+
     # LLM
     openai_api_key: str | None = None
     anthropic_api_key: str | None = None

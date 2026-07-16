@@ -89,10 +89,13 @@ CodeScope automates this workflow by combining static code analysis, dependency 
 - Authenticate users with GitHub OAuth
 - Manage organizations and repositories
 - Connect GitHub repositories
-- Synchronize repositories
 - Receive GitHub webhook events
-- Store repository metadata
-- Build the foundation for automated code intelligence
+- Clone and index a repository: AST-parse every Python file, extract
+  imports/classes/functions, and build the file-level dependency graph
+- Automatically re-index on every push
+- BFS traversal to find files directly and transitively affected by a change
+- Manual sync (`POST /projects/{id}/sync`) and a debug endpoint
+  (`GET /projects/{id}/affected-files?files=...`) to inspect the graph directly
 
 ---
 

@@ -4,10 +4,14 @@ from sqlalchemy.orm import Session
 from config import settings
 from database import get_db
 from dependencies.auth import get_current_user
+from services import graph_service
 from services.membership_service import require_admin
 from models.project import Project
 from schemas.project import ProjectCreateSchema
 from services.github_service import GitHubService
+from workers.indexing_tasks import parse_repository
+from services.project_service import get_project_for_user
+from models.membership import Membership
 
 router = APIRouter(tags=["projects"])
 
@@ -89,39 +93,102 @@ def create_project(
 @router.get("/orgs/{org_id}/projects")
 def list_projects(
     org_id: str,
+    request: Request,
     db: Session = Depends(get_db),
 ):
+    user = get_current_user(request, db)
+
     projects = (
         db.query(Project)
-        .filter(Project.org_id == org_id)
+        .join(
+            Membership,
+            Membership.org_id == Project.org_id,
+        )
+        .filter(
+            Membership.user_id == user.id,
+            Membership.org_id == org_id,
+        )
         .all()
     )
-
     return projects
 
 
 @router.get("/projects/{project_id}")
 def get_project(
     project_id: str,
+    request: Request,
     db: Session = Depends(get_db),
 ):
-    project = (
-        db.query(Project)
-        .filter(Project.id == project_id)
-        .first()
+    user = get_current_user(request, db)
+
+    return get_project_for_user(
+        db=db,
+        project_id=project_id,
+        user_id=user.id,
     )
 
-    if not project:
-        raise HTTPException(
-            status_code=404,
-            detail="Project not found",
-        )
-
-    return project
 
 
 @router.post("/projects/{project_id}/sync")
-def sync_project(project_id: str):
+def sync_project(
+    project_id: str,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    user = get_current_user(request, db)
+
+    project = get_project_for_user(
+        db=db,
+        project_id=project_id,
+        user_id=user.id,
+    )
+
+    task = parse_repository.delay(str(project.id))
+
     return {
-        "detail": "Repository indexing will be implemented on Day 3."
+        "detail": "Indexing started",
+        "task_id": task.id,
+    }
+
+
+
+@router.get("/projects/{project_id}/affected-files")
+def get_affected_files(
+    project_id: str,
+    files: str,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    user = get_current_user(request, db)
+
+    project = get_project_for_user(
+        db=db,
+        project_id=project_id,
+        user_id=user.id,
+    )
+
+    changed_files = [
+        f.strip()
+        for f in files.split(",")
+        if f.strip()
+    ]
+
+    if not changed_files:
+        raise HTTPException(
+            status_code=400,
+            detail="Provide at least one filepath",
+        )
+
+    directly_affected, transitively_affected = (
+        graph_service.find_affected_files(
+            db,
+            project.id,
+            changed_files,
+        )
+    )
+
+    return {
+        "changed_files": changed_files,
+        "directly_affected": directly_affected,
+        "transitively_affected": transitively_affected,
     }
