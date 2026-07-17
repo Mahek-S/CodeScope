@@ -32,6 +32,9 @@ class FileNode(Base):
     classes: Mapped[list[str] | None] = mapped_column(ARRAY(Text), nullable=True)
     functions: Mapped[list[str] | None] = mapped_column(ARRAY(Text), nullable=True)
     exports: Mapped[list[str] | None] = mapped_column(ARRAY(Text), nullable=True)
+    imports: Mapped[list[str] | None] = mapped_column(ARRAY(Text), nullable=True)
+    constants: Mapped[list[str] | None] = mapped_column(ARRAY(Text), nullable=True)
+    docstring: Mapped[str | None] = mapped_column(Text, nullable=True)
     content_hash: Mapped[str | None] = mapped_column(Text, nullable=True)
     embedding: Mapped[list[float] | None] = mapped_column(
         Vector(EMBEDDING_DIM), nullable=True

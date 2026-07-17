@@ -7,8 +7,13 @@ Extracts per file:
   - class names
   - function names (top-level)
   - exports (__all__ if defined)
+  - module docstring (first string literal in the module body)
+  - top-level constants (UPPER_CASE module-level assignments, e.g. REDIS_URL)
 
-Full implementation on Day 3.
+The docstring/constants are structural metadata, same spirit as classes
+and functions — not full file content. They exist because many
+infra/config files (celery_app.py, config.py) have no classes or
+functions at all, which otherwise leaves their embedding text empty.
 """
 
 import ast
@@ -31,6 +36,8 @@ class ParsedFile:
     classes: list[str] = field(default_factory=list)
     functions: list[str] = field(default_factory=list)
     exports: list[str] = field(default_factory=list)
+    module_docstring: str = ""
+    constants: list[str] = field(default_factory=list)
     content_hash: str = ""
 
 
@@ -43,7 +50,8 @@ def parse_python_file(filepath: str, source: str) -> ParsedFile:
         source:   Raw file contents as a string
 
     Returns:
-        ParsedFile with imports, classes, functions, exports, and content_hash
+        ParsedFile with imports, classes, functions, exports, docstring,
+        constants, and content_hash
     """
     result = ParsedFile(filepath=filepath)
     result.content_hash = hashlib.sha256(source.encode()).hexdigest()
@@ -53,6 +61,8 @@ def parse_python_file(filepath: str, source: str) -> ParsedFile:
     except SyntaxError:
         # Return partial result with just the hash — still useful for change detection
         return result
+
+    result.module_docstring = ast.get_docstring(tree) or ""
 
     for node in ast.walk(tree):
         # Imports
@@ -89,7 +99,43 @@ def parse_python_file(filepath: str, source: str) -> ParsedFile:
                             if isinstance(elt, ast.Constant) and isinstance(elt.value, str):
                                 result.exports.append(elt.value)
 
+    # Top-level constants: iterate tree.body directly (not ast.walk) so we
+    # only pick up module-level names, not every UPPER_CASE assignment
+    # nested inside a function or class body.
+    for node in tree.body:
+        if isinstance(node, ast.Assign):
+            for target in node.targets:
+                if isinstance(target, ast.Name) and _looks_like_constant(target.id):
+                    result.constants.append(target.id)
+        elif isinstance(node, ast.AnnAssign):
+            if isinstance(node.target, ast.Name) and _looks_like_constant(node.target.id):
+                result.constants.append(node.target.id)
+
     return result
+
+
+def _looks_like_constant(name: str) -> bool:
+    """UPPER_CASE module-level name, excluding dunders like __all__."""
+    return name.isupper() and not name.startswith("__")
+
+
+def import_display_names(imports: list[ImportRecord]) -> list[str]:
+    """
+    Turn parsed ImportRecords into short, readable strings for storage and
+    embedding text, e.g. ImportRecord(module='celery', names=['Celery'], level=0)
+    -> ['celery.Celery']. Deduplicated, order preserved.
+    """
+    seen: dict[str, None] = {}
+    for rec in imports:
+        prefix = "." * rec.level
+        base = f"{prefix}{rec.module}" if rec.module else prefix
+        if rec.names:
+            for name in rec.names:
+                display = f"{base}.{name}" if base else name
+                seen.setdefault(display, None)
+        elif base:
+            seen.setdefault(base, None)
+    return list(seen.keys())
 
 
 def get_module_names_for_filepath(filepath: str) -> list[str]:

@@ -26,7 +26,13 @@ from models.organization import Organization
 from models.project import Project
 from utils.embeddings import file_summary_text, generate_embeddings_batch
 from utils.git_ops import GitOpsError, clone_repository, discover_python_files
-from utils.parser import ParsedFile, parse_python_file, resolve_import_to_filepaths, build_module_index
+from utils.parser import (
+    ParsedFile,
+    build_module_index,
+    import_display_names,
+    parse_python_file,
+    resolve_import_to_filepaths,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -143,6 +149,7 @@ def _upsert_file_nodes(
     file_node_ids = {}
 
     for rel_path, parsed in parsed_by_path.items():
+        import_names = import_display_names(parsed.imports)
         stmt = (
             pg_insert(FileNode)
             .values(
@@ -152,6 +159,9 @@ def _upsert_file_nodes(
                 classes=parsed.classes,
                 functions=parsed.functions,
                 exports=parsed.exports,
+                imports=import_names,
+                constants=parsed.constants,
+                docstring=parsed.module_docstring or None,
                 content_hash=parsed.content_hash,
                 last_indexed=now,
             )
@@ -161,6 +171,9 @@ def _upsert_file_nodes(
                     "classes": parsed.classes,
                     "functions": parsed.functions,
                     "exports": parsed.exports,
+                    "imports": import_names,
+                    "constants": parsed.constants,
+                    "docstring": parsed.module_docstring or None,
                     "content_hash": parsed.content_hash,
                     "last_indexed": now,
                 },
@@ -266,7 +279,14 @@ def generate_project_embeddings(db: Session, project: Project) -> dict:
         return {"files_embedded": 0}
 
     summaries = [
-        file_summary_text(fn.filepath, fn.classes or [], fn.functions or [])
+        file_summary_text(
+            fn.filepath,
+            fn.classes or [],
+            fn.functions or [],
+            imports=fn.imports or [],
+            constants=fn.constants or [],
+            docstring=fn.docstring,
+        )
         for fn in file_nodes
     ]
     vectors = generate_embeddings_batch(summaries)

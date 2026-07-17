@@ -44,13 +44,32 @@ def generate_embeddings_batch(texts: list[str]) -> list[list[float]]:
     return [v.tolist() for v in vectors]
 
 
-def file_summary_text(filepath: str, classes: list[str], functions: list[str]) -> str:
+def file_summary_text(
+    filepath: str,
+    classes: list[str],
+    functions: list[str],
+    imports: list[str] | None = None,
+    constants: list[str] | None = None,
+    docstring: str | None = None,
+) -> str:
     """
     Build a short textual summary of a file for embedding.
-    Combines filepath + class names + function names so the vector
-    captures structural meaning, not just file content.
+
+    Still structural metadata, not file content -- but classes/functions
+    alone leave many infra and config files (celery_app.py, config.py)
+    with an almost-empty summary, since they define neither. Imports,
+    top-level constants (REDIS_URL, DATABASE_URL, ...), and the module
+    docstring are cheap to include and are exactly where a file like that
+    actually states its purpose.
     """
     parts = [f"File: {filepath}"]
+    if docstring:
+        first_line = docstring.strip().splitlines()[0]
+        parts.append(f"Description: {first_line}")
+    if imports:
+        parts.append(f"Imports: {', '.join(imports)}")
+    if constants:
+        parts.append(f"Constants: {', '.join(constants)}")
     if classes:
         parts.append(f"Classes: {', '.join(classes)}")
     if functions:
