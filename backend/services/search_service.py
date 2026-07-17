@@ -11,6 +11,8 @@ from sqlalchemy.orm import Session
 from models.file_node import FileNode
 from utils.embeddings import generate_embedding
 
+from models.analysis import Analysis
+
 DEFAULT_LIMIT = 10
 MAX_LIMIT = 50
 
@@ -59,3 +61,60 @@ def search_files(
         }
         for filepath, classes, functions, dist in rows
     ]
+
+
+def find_similar_past_analyses(
+    db: Session,
+    project_id,
+    changed_files: list[str],
+    limit: int = 5,
+    candidate_pool: int = 200,
+) -> list[dict]:
+    """
+    Approximate "similar past bugs" for a PR using file embeddings.
+
+    The `analyses` table isn't itself embedded (no vector column in the
+    v1 schema) so past analyses aren't directly nearest-neighbor
+    searchable. Instead: embed the changed filepaths as one query,
+    find semantically similar files in the project via the same
+    file-embedding index `search_files` uses, then surface past
+    analyses whose changed_files overlap with those similar files. A
+    change that touches code semantically similar to a past incident's
+    code is a reasonable proxy for "similar past bug" without standing
+    up a second embedding pipeline just for analyses.
+    """
+    if not changed_files:
+        return []
+
+    similar_files = search_files(db, project_id, " ".join(changed_files), limit=10)
+    similar_paths = {f["filepath"] for f in similar_files} - set(changed_files)
+    if not similar_paths:
+        return []
+
+    candidates = (
+        db.query(Analysis)
+        .filter(Analysis.project_id == project_id)
+        .filter(Analysis.changed_files.isnot(None))
+        .order_by(Analysis.created_at.desc())
+        .limit(candidate_pool)
+        .all()
+    )
+
+    matches = []
+    for analysis in candidates:
+        overlap = similar_paths.intersection(analysis.changed_files or [])
+        if not overlap:
+            continue
+        matches.append(
+            {
+                "analysis_id": str(analysis.id),
+                "pr_number": analysis.pr_number,
+                "risk_level": analysis.risk_level,
+                "overlapping_files": sorted(overlap),
+                "created_at": analysis.created_at.isoformat() if analysis.created_at else None,
+            }
+        )
+        if len(matches) >= limit:
+            break
+
+    return matches

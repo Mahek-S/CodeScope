@@ -102,10 +102,27 @@ class GitHubService:
         repo = self.get_repository(repo_full_name)
         return repo.get_pull(pr_number)
 
-    def get_pr_changed_files(self, repo_full_name: str, pr_number: int) -> list[str]:
+    def get_pr_files(self, repo_full_name: str, pr_number: int) -> list:
+        """
+        Return the raw PyGithub File objects for a PR, fetched once.
+        Callers that need both filenames and diff stats (e.g.
+        analysis_service) should use this directly rather than calling
+        get_pr_changed_files + get_pr_diff_size separately, which would
+        hit the GitHub API twice for the same data.
+        """
         pr = self.get_pull_request(repo_full_name, pr_number)
-        return [f.filename for f in pr.get_files()]
+        return list(pr.get_files())
 
+
+    def get_pr_changed_files(self, repo_full_name: str, pr_number: int) -> list[str]:
+        return [f.filename for f in self.get_pr_files(repo_full_name, pr_number)]
+
+
+    def get_pr_diff_size(self, repo_full_name: str, pr_number: int) -> int:
+        """Total lines added + removed across the PR — a risk-scoring input."""
+        return sum(f.additions + f.deletions for f in self.get_pr_files(repo_full_name, pr_number))
+
+    
     def post_pr_comment(self, repo_full_name: str, pr_number: int, body: str) -> int:
         """Post a comment on a PR and return the comment ID."""
         pr = self.get_pull_request(repo_full_name, pr_number)

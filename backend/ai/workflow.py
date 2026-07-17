@@ -1,6 +1,5 @@
 """
 LangGraph workflow definition for impact analysis.
-Full implementation on Day 5.
 """
 from langgraph.graph import END, StateGraph
 
@@ -10,7 +9,6 @@ from ai.nodes import (
     format_output,
     load_changed_files,
     llm_reasoning,
-    post_github_comment,
     retrieve_similar_bugs,
     traverse_dependency_graph,
 )
@@ -21,16 +19,22 @@ def build_impact_analysis_graph() -> StateGraph:
     """
     Construct and compile the LangGraph state machine.
 
-    Graph shape:
+    Day 5 graph shape (deterministic infra -> LLM synthesis, JSON out --
+    no GitHub posting yet):
+
     load_changed_files
-      → traverse_dependency_graph
-      → compute_risk_score
-      → retrieve_similar_bugs
-      → build_context
-      → llm_reasoning
-      → format_output
-      → post_github_comment
-      → END
+      -> traverse_dependency_graph
+      -> compute_risk_score
+      -> retrieve_similar_bugs
+      -> build_context
+      -> llm_reasoning
+      -> format_output
+      -> END
+
+    ai/nodes.post_github_comment is implemented but intentionally left
+    out of this graph -- it gets appended between format_output and END
+    on Day 6, once services/analysis_service also handles storing the
+    resulting GitHub comment ID.
     """
     graph = StateGraph(ImpactAnalysisState)
 
@@ -41,7 +45,6 @@ def build_impact_analysis_graph() -> StateGraph:
     graph.add_node("build_context", build_context)
     graph.add_node("llm_reasoning", llm_reasoning)
     graph.add_node("format_output", format_output)
-    graph.add_node("post_github_comment", post_github_comment)
 
     graph.set_entry_point("load_changed_files")
     graph.add_edge("load_changed_files", "traverse_dependency_graph")
@@ -50,11 +53,10 @@ def build_impact_analysis_graph() -> StateGraph:
     graph.add_edge("retrieve_similar_bugs", "build_context")
     graph.add_edge("build_context", "llm_reasoning")
     graph.add_edge("llm_reasoning", "format_output")
-    graph.add_edge("format_output", "post_github_comment")
-    graph.add_edge("post_github_comment", END)
+    graph.add_edge("format_output", END)
 
     return graph.compile()
 
 
-# Module-level compiled graph instance — reused across tasks
+# Module-level compiled graph instance -- reused across tasks
 impact_analysis_graph = build_impact_analysis_graph()
