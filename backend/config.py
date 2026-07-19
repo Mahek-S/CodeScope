@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     # LLM
     openai_api_key: str | None = None
     anthropic_api_key: str | None = None
+    gemini_api_key: str| None= None
 
     # Session
     secret_key: str

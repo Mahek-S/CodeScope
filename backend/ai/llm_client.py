@@ -11,10 +11,12 @@ from __future__ import annotations
 
 from config import settings
 
+
 # "-latest" aliases track the newest snapshot of each model family
 # without pinning a specific dated model name here.
 ANTHROPIC_MODEL = "claude-3-5-sonnet-latest"
 OPENAI_MODEL = "gpt-4o"
+GEMINI_MODEL = "gemini-2.5-flash"
 
 MAX_TOKENS = 1024
 
@@ -30,6 +32,8 @@ async def call_llm(system_prompt: str, user_prompt: str) -> str:
     whole analysis, since the deterministic risk score is still useful
     on its own.
     """
+    if settings.gemini_api_key:
+        return await _call_gemini(system_prompt, user_prompt)
     if settings.anthropic_api_key:
         return await _call_anthropic(system_prompt, user_prompt)
     if settings.openai_api_key:
@@ -51,6 +55,20 @@ async def _call_anthropic(system_prompt: str, user_prompt: str) -> str:
     )
     return "".join(block.text for block in response.content if block.type == "text")
 
+async def _call_gemini(system_prompt: str, user_prompt: str) -> str:
+    client = genai.Client(api_key=settings.gemini_api_key)
+
+    response = await client.aio.models.generate_content(
+        model=GEMINI_MODEL,
+        contents=f"""System:
+{system_prompt}
+
+User:
+{user_prompt}
+""",
+    )
+
+    return response.text or ""
 
 async def _call_openai(system_prompt: str, user_prompt: str) -> str:
     from openai import AsyncOpenAI

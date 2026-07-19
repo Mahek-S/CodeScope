@@ -137,6 +137,10 @@ async def llm_reasoning(state: ImpactAnalysisState) -> ImpactAnalysisState:
     raw_output = ""
     try:
         raw_output = await call_llm(IMPACT_ANALYSIS_SYSTEM_PROMPT, prompt)
+        logger.info("=" * 60)
+        logger.info("RAW LLM RESPONSE:")
+        logger.info(raw_output)
+        logger.info("=" * 60)
     except Exception as e:
         # A failed LLM call degrades the analysis (no explanation) rather
         # than failing it outright -- the deterministic risk score and
@@ -145,8 +149,11 @@ async def llm_reasoning(state: ImpactAnalysisState) -> ImpactAnalysisState:
             "LLM reasoning failed for project %s PR #%s: %s",
             state["project_id"], state.get("pr_number"), e,
         )
+    
 
     explanation, llm_testing_areas = parse_llm_response(raw_output) 
+    logger.info("Parsed explanation: %s", explanation)
+    logger.info("Testing areas: %s", llm_testing_areas)
 
     db = SessionLocal()
     try:
