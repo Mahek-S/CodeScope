@@ -4,6 +4,9 @@ PyGithub wrapper for all GitHub API interactions.
 import httpx
 from github import Github
 from config import settings
+import logging
+
+logger = logging.getLogger(__name__)
 
 GITHUB_OAUTH_TOKEN_URL = "https://github.com/login/oauth/access_token"
 GITHUB_API_BASE = "https://api.github.com"
@@ -82,8 +85,29 @@ class GitHubService:
     ## Webhooks
 
     def create_repo_webhook(self, repo_full_name: str, webhook_url: str, secret: str) -> int:
-        """Create a webhook on the repo for push + pull_request events. Returns webhook ID."""
+        """
+        Create a webhook on the repo for push + pull_request events. Returns webhook ID.
+
+        Idempotent: GitHub rejects a second hook with the same payload URL
+        (422 "Hook already exists on this repository"), which happens any
+        time a project is reconnected without first deleting the old hook
+        GitHub-side (e.g. after a local DB wipe). We look for a hook whose
+        config URL already matches before creating a new one, so
+        reconnecting a project is safe to repeat.
+
+        Note: GitHub never returns a hook's stored secret via the API, so
+        we can only match on URL, not on secret -- fine here since
+        settings.github_webhook_secret is a single app-level value, not
+        per-project, so any existing hook at this URL was necessarily
+        created with the same secret.
+        """
         repo = self.get_repository(repo_full_name)
+
+        for hook in repo.get_hooks():
+            if hook.config.get("url") == webhook_url:
+                logger.info("Reusing existing webhook %s for %s", hook.id, repo_full_name)
+                return hook.id
+
         hook = repo.create_hook(
             name="web",
             config={
@@ -94,6 +118,7 @@ class GitHubService:
             events=["push", "pull_request"],
             active=True,
         )
+        logger.info("Created new webhook %s for %s", hook.id, repo_full_name)
         return hook.id
 
     ## Pull Requests
@@ -102,10 +127,27 @@ class GitHubService:
         repo = self.get_repository(repo_full_name)
         return repo.get_pull(pr_number)
 
-    def get_pr_changed_files(self, repo_full_name: str, pr_number: int) -> list[str]:
+    def get_pr_files(self, repo_full_name: str, pr_number: int) -> list:
+        """
+        Return the raw PyGithub File objects for a PR, fetched once.
+        Callers that need both filenames and diff stats (e.g.
+        analysis_service) should use this directly rather than calling
+        get_pr_changed_files + get_pr_diff_size separately, which would
+        hit the GitHub API twice for the same data.
+        """
         pr = self.get_pull_request(repo_full_name, pr_number)
-        return [f.filename for f in pr.get_files()]
+        return list(pr.get_files())
 
+
+    def get_pr_changed_files(self, repo_full_name: str, pr_number: int) -> list[str]:
+        return [f.filename for f in self.get_pr_files(repo_full_name, pr_number)]
+
+
+    def get_pr_diff_size(self, repo_full_name: str, pr_number: int) -> int:
+        """Total lines added + removed across the PR — a risk-scoring input."""
+        return sum(f.additions + f.deletions for f in self.get_pr_files(repo_full_name, pr_number))
+
+    
     def post_pr_comment(self, repo_full_name: str, pr_number: int, body: str) -> int:
         """Post a comment on a PR and return the comment ID."""
         pr = self.get_pull_request(repo_full_name, pr_number)

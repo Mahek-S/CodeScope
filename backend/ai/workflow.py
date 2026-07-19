@@ -1,6 +1,5 @@
 """
 LangGraph workflow definition for impact analysis.
-Full implementation on Day 5.
 """
 from langgraph.graph import END, StateGraph
 
@@ -10,9 +9,9 @@ from ai.nodes import (
     format_output,
     load_changed_files,
     llm_reasoning,
-    post_github_comment,
     retrieve_similar_bugs,
     traverse_dependency_graph,
+    post_github_comment
 )
 from ai.state import ImpactAnalysisState
 
@@ -21,16 +20,22 @@ def build_impact_analysis_graph() -> StateGraph:
     """
     Construct and compile the LangGraph state machine.
 
-    Graph shape:
+    Day 5 graph shape (deterministic infra -> LLM synthesis, JSON out --
+    no GitHub posting yet):
+
     load_changed_files
-      → traverse_dependency_graph
-      → compute_risk_score
-      → retrieve_similar_bugs
-      → build_context
-      → llm_reasoning
-      → format_output
-      → post_github_comment
-      → END
+      -> traverse_dependency_graph
+      -> compute_risk_score
+      -> retrieve_similar_bugs
+      -> build_context
+      -> llm_reasoning
+      -> format_output
+      -> END
+
+    ai/nodes.post_github_comment is implemented but intentionally left
+    out of this graph -- it gets appended between format_output and END
+    on Day 6, once services/analysis_service also handles storing the
+    resulting GitHub comment ID.
     """
     graph = StateGraph(ImpactAnalysisState)
 
@@ -56,5 +61,5 @@ def build_impact_analysis_graph() -> StateGraph:
     return graph.compile()
 
 
-# Module-level compiled graph instance — reused across tasks
+# Module-level compiled graph instance -- reused across tasks
 impact_analysis_graph = build_impact_analysis_graph()

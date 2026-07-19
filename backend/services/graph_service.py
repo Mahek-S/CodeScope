@@ -7,6 +7,7 @@ flows the other way: if target changes, source is affected. So we build
 a reverse-adjacency map (target -> [files that import it]) and BFS
 outward from the changed files.
 """
+from pathlib import Path
 
 from sqlalchemy.orm import Session, aliased
 
@@ -73,3 +74,44 @@ def find_affected_files(
         frontier = next_frontier
 
     return sorted(directly_affected), sorted(transitively_affected)
+
+
+
+def suggest_test_files(
+    db: Session, project_id, related_files: list[str]
+) -> list[str]:
+    """
+    Heuristic test-file suggestion: any indexed file that looks like a
+    test (path contains "test") and shares a name stem with one of the
+    changed/affected files.
+
+    This runs alongside — not instead of — the LLM's own test
+    suggestions in ai/nodes.llm_reasoning. It catches the obvious
+    "test_foo.py exists for foo.py" case deterministically, even if the
+    LLM's suggestion misses it.
+    """
+    if not related_files:
+        return []
+
+    candidate_rows = (
+        db.query(FileNode.filepath)
+        .filter(FileNode.project_id == project_id)
+        .filter(FileNode.filepath.ilike("%test%"))
+        .all()
+    )
+    test_paths = [row[0] for row in candidate_rows]
+    if not test_paths:
+        return []
+
+    stems = {
+        Path(f).stem.removeprefix("test_").removesuffix("_test")
+        for f in related_files
+    }
+    stems.discard("")
+
+    matched = {
+        test_path
+        for test_path in test_paths
+        if any(stem in test_path for stem in stems)
+    }
+    return sorted(matched)

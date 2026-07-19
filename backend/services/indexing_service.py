@@ -41,9 +41,12 @@ class IndexingError(Exception):
     """Raised when a repository can't be resolved, cloned, or indexed."""
 
 
-def get_clone_token(db: Session, project: Project) -> str:
+def get_repo_access_token(db: Session, project: Project) -> str:
     """
-    Resolve a GitHub access token usable to clone this project's repo.
+    Resolve a GitHub access token usable both to clone this project's repo
+    and to call the GitHub API on its behalf (posting PR comments,
+    fetching PR file lists, etc.) -- one token, every GitHub interaction
+    for this project goes through it.
 
     We use the organization creator's token: they're the one who connected
     the repo via OAuth, so their token is guaranteed to have `repo` scope
@@ -69,7 +72,7 @@ def index_repository(db: Session, project: Project) -> dict:
     index are deleted; dependency edges are cleared and rebuilt each run
     so renamed/removed imports never leave stale edges behind.
     """
-    access_token = get_clone_token(db, project)
+    access_token = get_repo_access_token(db, project)
 
     try:
         repo_root = clone_repository(
