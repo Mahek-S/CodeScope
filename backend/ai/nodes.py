@@ -229,20 +229,20 @@ def _build_pr_comment_markdown(state: ImpactAnalysisState) -> str:
     score_pct = round(state["risk_score"] * 100)
 
     lines = [
-        "## CodeScope Impact Analysis",
+        "## 🔍 CodeScope Impact Analysis",
         "",
         "| Risk | Score |",
         "|------|-------|",
         f"| {badge} **{risk_level.upper()}** | {score_pct}/100 |",
         "",
-        "### Changed Files",
-        _bullet_list(state["changed_files"]),
+        f"### Changed Files ({len(state['changed_files'])})",
+        _bullet_list_capped(state["changed_files"]),
         "",
-        "### Directly Affected",
-        _bullet_list(state["directly_affected"]),
+        f"### Directly Affected ({len(state['directly_affected'])})",
+        _bullet_list_capped(state["directly_affected"]),
         "",
-        "### Transitively Affected",
-        _bullet_list(state["transitively_affected"]),
+        f"### Transitively Affected ({len(state['transitively_affected'])})",
+        _bullet_list_capped(state["transitively_affected"]),
         "",
         "### Suggested Tests",
         _bullet_list(state.get("suggested_tests", [])),
@@ -281,6 +281,25 @@ def _build_pr_comment_markdown(state: ImpactAnalysisState) -> str:
 def _bullet_list(items: list[str]) -> str:
     return "\n".join(f"- {item}" for item in items) if items else "(none)"
 
+def _bullet_list_capped(items: list[str], cap: int = 10) -> str:
+    """
+    Same as _bullet_list, but for PR-comment display: show the first `cap`
+    items and collapse the rest behind <details> instead of dumping every
+    filename. The LLM-facing prompt (see build_context) intentionally uses
+    the uncapped _bullet_list -- the model needs the full list to reason
+    well; only the human-facing comment needs to stay scannable.
+    """
+    if not items:
+        return "(none)"
+    if len(items) <= cap:
+        return _bullet_list(items)
+
+    visible = _bullet_list(items[:cap])
+    hidden = _bullet_list(items[cap:])
+    return (
+        f"{visible}\n"
+        f"<details>\n<summary>+{len(items) - cap} more</summary>\n\n{hidden}\n</details>"
+    )
 
 def _format_similar_bugs(bugs: list[dict]) -> str:
     if not bugs:
