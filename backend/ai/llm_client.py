@@ -16,7 +16,7 @@ from config import settings
 # without pinning a specific dated model name here.
 ANTHROPIC_MODEL = "claude-3-5-sonnet-latest"
 OPENAI_MODEL = "gpt-4o"
-GEMINI_MODEL = "gemini-2.5-flash"
+GEMINI_MODEL = "gemini-3.5-flash"
 
 MAX_TOKENS = 1024
 
