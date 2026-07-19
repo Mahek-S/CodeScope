@@ -56,6 +56,7 @@ async def _call_anthropic(system_prompt: str, user_prompt: str) -> str:
     return "".join(block.text for block in response.content if block.type == "text")
 
 async def _call_gemini(system_prompt: str, user_prompt: str) -> str:
+    from google import genai
     client = genai.Client(api_key=settings.gemini_api_key)
 
     response = await client.aio.models.generate_content(
