@@ -20,6 +20,10 @@ from ai.prompts import IMPACT_ANALYSIS_SYSTEM_PROMPT, IMPACT_ANALYSIS_USER_TEMPL
 from ai.state import ImpactAnalysisState
 from services import graph_service, risk_service, search_service
 
+from models.project import Project
+from services.github_service import GitHubService
+from services.indexing_service import get_repo_access_token
+
 logger = logging.getLogger(__name__)
 
 
@@ -172,31 +176,106 @@ async def llm_reasoning(state: ImpactAnalysisState) -> ImpactAnalysisState:
         "explanation": explanation or "No explanation available for this analysis.",
         "heuristic_test_files": heuristic_test_files,
         "llm_testing_areas": llm_testing_areas,
+        "suggested_tests": suggested_tests,
         "raw_llm_output": raw_output,
     }
 
 
 async def format_output(state: ImpactAnalysisState) -> ImpactAnalysisState:
-    """
-    Node 7: Structure the final output.
-
-    State is already shaped like the output by this point -- this node
-    is the single seam where a future output format (e.g. the GitHub
-    markdown comment body) gets built without every upstream node
-    needing to know about it.
-    """
-    return state
+    """Node 7: Build the GitHub-facing markdown comment body."""
+    return {**state, "comment_markdown": _build_pr_comment_markdown(state)}
 
 
 async def post_github_comment(state: ImpactAnalysisState) -> ImpactAnalysisState:
     """
-    Node 8: Format markdown and post via GitHub API.
+    Node 8: Post the formatted comment via the GitHub API.
 
-    Implemented Day 6. Not wired into the Day 5 graph (see
-    ai/workflow.py) -- Day 5 ends at format_output and returns JSON only,
-    per the spec's Day 5 done-when criteria.
+    A failure here degrades the same way an LLM failure does: the
+    analysis is already computed and still gets persisted by
+    analysis_service regardless of whether the comment posts, so this
+    logs and returns github_comment_id=None rather than raising and
+    losing a fully-computed analysis over a GitHub API hiccup.
     """
-    return state
+    db = SessionLocal()
+    try:
+        project = db.query(Project).filter(Project.id == state["project_id"]).first()
+        if not project:
+            logger.warning("Cannot post PR comment: project %s not found", state["project_id"])
+            return {**state, "github_comment_id": None}
+
+        access_token = get_repo_access_token(db, project)
+        github = GitHubService(access_token)
+        comment_id = github.post_pr_comment(
+            project.repo_full_name, state["pr_number"], state["comment_markdown"]
+        )
+    except Exception as e:
+        logger.error(
+            "Failed to post PR comment for project %s PR #%s: %s",
+            state["project_id"], state.get("pr_number"), e,
+        )
+        return {**state, "github_comment_id": None}
+    finally:
+        db.close()
+
+    return {**state, "github_comment_id": comment_id}
+
+
+_RISK_BADGES = {"low": "🟢", "medium": "🟡", "high": "🔴"}
+
+
+def _build_pr_comment_markdown(state: ImpactAnalysisState) -> str:
+    risk_level = state["risk_level"]
+    badge = _RISK_BADGES.get(risk_level, "⚪")
+    score_pct = round(state["risk_score"] * 100)
+
+    lines = [
+        "## CodeScope Impact Analysis",
+        "",
+        "| Risk | Score |",
+        "|------|-------|",
+        f"| {badge} **{risk_level.upper()}** | {score_pct}/100 |",
+        "",
+        "### Changed Files",
+        _bullet_list(state["changed_files"]),
+        "",
+        "### Directly Affected",
+        _bullet_list(state["directly_affected"]),
+        "",
+        "### Transitively Affected",
+        _bullet_list(state["transitively_affected"]),
+        "",
+        "### Suggested Tests",
+        _bullet_list(state.get("suggested_tests", [])),
+        "",
+        "### Why?",
+        state.get("explanation") or "No explanation available for this analysis.",
+    ]
+
+    similar_bugs = state.get("similar_bugs") or []
+    if similar_bugs:
+        lines += [
+            "",
+            "<details>",
+            "<summary>Similar historical changes</summary>",
+            "",
+        ]
+        for bug in similar_bugs[:3]:
+            overlap = ", ".join(bug.get("overlapping_files", [])[:3])
+            lines.append(
+                f"- PR #{bug.get('pr_number', '?')} "
+                f"({bug.get('risk_level', 'unknown')} risk) — touched: {overlap}"
+            )
+        lines += ["", "</details>"]
+
+    lines += [
+        "",
+        "---",
+        "*Posted automatically by CodeScope — the risk score above is "
+        "computed deterministically before the LLM explains it; the LLM "
+        "does not set or override the score.*",
+    ]
+
+    return "\n".join(lines)
 
 
 def _bullet_list(items: list[str]) -> str:

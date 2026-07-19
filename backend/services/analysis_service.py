@@ -20,7 +20,7 @@ from models.analysis import Analysis
 from models.project import Project
 from models.pull_request import PullRequest
 from services.github_service import GitHubService
-from services.indexing_service import get_clone_token
+from services.indexing_service import get_repo_access_token
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +35,7 @@ def _resolve_pr_files(
     same function, and diff size isn't persisted anywhere, so there's no
     cache to fall back to that would actually save a call.
     """
-    access_token = get_clone_token(db, project)
+    access_token = get_repo_access_token(db, project)
     github = GitHubService(access_token)
 
     files = github.get_pr_files(project.repo_full_name, pr_number)
@@ -97,7 +97,11 @@ def trigger_analysis(
         "risk_level": "low",
         "similar_bugs": [],
         "explanation": "",
+        "heuristic_test_files": [],
+        "llm_testing_areas": [],
         "suggested_tests": [],
+        "comment_markdown": "",
+        "github_comment_id": None,
         "raw_llm_output": "",
     }
 
@@ -115,11 +119,12 @@ def trigger_analysis(
         directly_affected=final_state["directly_affected"],
         transitively_affected=final_state["transitively_affected"],
         similar_past_bugs={"items": final_state["similar_bugs"]},
-        suggested_tests=suggested_tests,
+        suggested_tests=final_state["suggested_tests"],
         risk_score=final_state["risk_score"],
         risk_level=final_state["risk_level"],
         explanation=final_state["explanation"],
         raw_llm_output=final_state["raw_llm_output"],
+        github_comment_id=final_state.get("github_comment_id"),
     )
     db.add(analysis)
     db.commit()

@@ -11,6 +11,7 @@ from ai.nodes import (
     llm_reasoning,
     retrieve_similar_bugs,
     traverse_dependency_graph,
+    post_github_comment
 )
 from ai.state import ImpactAnalysisState
 
@@ -45,6 +46,7 @@ def build_impact_analysis_graph() -> StateGraph:
     graph.add_node("build_context", build_context)
     graph.add_node("llm_reasoning", llm_reasoning)
     graph.add_node("format_output", format_output)
+    graph.add_node("post_github_comment", post_github_comment)
 
     graph.set_entry_point("load_changed_files")
     graph.add_edge("load_changed_files", "traverse_dependency_graph")
@@ -53,7 +55,8 @@ def build_impact_analysis_graph() -> StateGraph:
     graph.add_edge("retrieve_similar_bugs", "build_context")
     graph.add_edge("build_context", "llm_reasoning")
     graph.add_edge("llm_reasoning", "format_output")
-    graph.add_edge("format_output", END)
+    graph.add_edge("format_output", "post_github_comment")
+    graph.add_edge("post_github_comment", END)
 
     return graph.compile()
 
