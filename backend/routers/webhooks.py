@@ -32,9 +32,6 @@ async def github_webhook(request: Request, db: Session = Depends(get_db)):
     if not verify_github_signature(payload_body=payload_body,secret=settings.github_webhook_secret,signature_header=signature):
         raise HTTPException(401, "Invalid webhook signature")
 
-    if not verify_github_signature(payload_body=payload_body,secret=settings.github_webhook_secret,signature_header=signature):
-        raise HTTPException(401, "Invalid webhook signature")
-
     # GitHub retries deliveries that time out or 5xx, reusing the same
     # X-GitHub-Delivery ID. Recording it here — after signature
     # verification, so an unsigned request can't burn a legitimate
