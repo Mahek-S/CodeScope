@@ -25,6 +25,31 @@ from services.indexing_service import get_repo_access_token
 logger = logging.getLogger(__name__)
 
 
+NOISE_EXTENSIONS = {
+    ".zip", ".tar", ".gz", ".png", ".jpg", ".jpeg", ".gif", ".ico", ".svg", ".pdf",
+}
+NOISE_FILENAMES = {"readme.md", "license", "license.md", ".gitignore", ".gitattributes"}
+
+
+def _is_noise_file(filepath: str) -> bool:
+    """
+    Filter for files that shouldn't count toward impact analysis at all --
+    binary assets and pure repo metadata. Deliberately NOT excluding
+    requirements.txt, Dockerfiles, or config/YAML files -- those are real
+    signal (a dependency bump or config change is meaningful risk), unlike
+    a committed zip archive or a README edit.
+    """
+    lower = filepath.lower()
+    filename = lower.rsplit("/", 1)[-1]
+    if any(lower.endswith(ext) for ext in NOISE_EXTENSIONS):
+        return True
+    if filename in NOISE_FILENAMES:
+        return True
+    if lower.startswith(".github/"):
+        return True
+    return False
+
+
 def _resolve_pr_files(
     db: Session, project: Project, pr_number: int
 ) -> tuple[list[str], int]:
@@ -38,10 +63,10 @@ def _resolve_pr_files(
     access_token = get_repo_access_token(db, project)
     github = GitHubService(access_token)
 
-    files = github.get_pr_files(project.repo_full_name, pr_number)
+    files = [f for f in github.get_pr_files(project.repo_full_name, pr_number) if not _is_noise_file(f.filename)]
     changed_files = [f.filename for f in files]
     diff_size = sum(f.additions + f.deletions for f in files)
-
+    
     return changed_files, diff_size
 
 

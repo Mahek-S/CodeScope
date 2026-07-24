@@ -32,6 +32,7 @@ class Project(Base):
     repo_full_name: Mapped[str] = mapped_column(Text, nullable=False)  # e.g. "username/reponame"
     repo_url: Mapped[str] = mapped_column(Text, nullable=False)
     default_branch: Mapped[str] = mapped_column(Text, default="main")
+    webhook_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)  # GitHub hook ID, for future disconnect/delete
     indexed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()

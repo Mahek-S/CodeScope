@@ -65,11 +65,12 @@ def create_project(
         # not a per-project secret. GitHub Apps verify all webhook
         # deliveries against one shared secret; there's nothing
         # per-project to generate or persist here.
-        github.create_repo_webhook(
+        webhook_id = github.create_repo_webhook(
             repo_full_name=payload.repo_full_name,
             webhook_url=webhook_url,
             secret=settings.github_webhook_secret,
         )
+        project.webhook_id = webhook_id
 
         db.commit()
         db.refresh(project)
