@@ -245,6 +245,7 @@ def _build_pr_comment_markdown(state: ImpactAnalysisState) -> str:
         _bullet_list_capped(state["transitively_affected"]),
         "",
         "### Suggested Tests",
+        "_(inferred from affected modules — verify these exist before relying on them)_",
         _bullet_list(state.get("suggested_tests", [])),
         "",
         "### Why?",

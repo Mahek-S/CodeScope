@@ -21,6 +21,7 @@ class User(Base):
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
     github_id: Mapped[int] = mapped_column(BigInteger, unique=True, nullable=False)
+    github_username: Mapped[str | None] = mapped_column(Text, nullable=True)  # GitHub 'login', for @handle display
     email: Mapped[str | None] = mapped_column(Text, nullable=True)
     name: Mapped[str] = mapped_column(Text, nullable=False)
     avatar_url: Mapped[str | None] = mapped_column(Text, nullable=True)
