@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     # Public URL this backend is reachable at, used to register the
     # GitHub webhook (e.g. an ngrok URL in dev, your real domain in prod).
     public_base_url: str = "http://localhost:8000"
+    frontend_url: str = "http://localhost:5173"
 
     # LLM
     openai_api_key: str | None = None
