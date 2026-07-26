@@ -29,3 +29,8 @@ Thumbs.db
 # Docker volumes
 postgres_data/
 redis_data/
+
+node_modules/
+frontend/node_modules/
+dist/
+build/

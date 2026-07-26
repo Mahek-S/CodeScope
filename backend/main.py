@@ -36,7 +36,7 @@ app.add_middleware(
 # CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=[settings.frontend_url],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -48,6 +48,7 @@ app.include_router(projects.router)
 app.include_router(webhooks.router)
 app.include_router(search.router)
 app.include_router(analyses.router)
+app.include_router(auth.me_router)
 
 
 @app.get("/health")

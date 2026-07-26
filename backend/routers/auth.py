@@ -7,10 +7,11 @@ from dependencies.auth import get_current_user
 from models.user import User
 from schemas.user import CurrentUserSchema
 from config import settings
-
+import os
 
 router = APIRouter(prefix="/auth/github", tags=["auth"])
 GITHUB_AUTHORIZE_URL = "https://github.com/login/oauth/authorize"
+FRONTEND_URL = os.getenv("FRONTEND_URL")
 
 # Separate router: these live at /auth/*, not /auth/github/*
 me_router = APIRouter(prefix="/auth", tags=["auth"])
@@ -50,7 +51,7 @@ async def callback(request: Request, code: str, db: Session = Depends(get_db)):
     db.refresh(user)
 
     request.session["user_id"] = str(user.id)
-    return RedirectResponse(url="/")
+    return RedirectResponse(url=settings.frontend_url)
 
 
 @me_router.get("/me", response_model=CurrentUserSchema)
