@@ -229,7 +229,7 @@ def _build_pr_comment_markdown(state: ImpactAnalysisState) -> str:
     score_pct = round(state["risk_score"] * 100)
 
     lines = [
-        "## 🔍 CodeScope Impact Analysis",
+        "## CodeScope Impact Analysis",
         "",
         "| Risk | Score |",
         "|------|-------|",

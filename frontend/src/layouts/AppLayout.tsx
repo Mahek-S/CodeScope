@@ -1,9 +1,11 @@
 import { useState } from "react";
-import { Outlet, useNavigate } from "react-router-dom";
-import { LayoutGrid, Moon, Sun } from "lucide-react";
+import { Outlet, useLocation, useNavigate } from "react-router-dom";
+import { LayoutGrid, Moon, Sun, FolderGit2, Search, Plus } from "lucide-react";
 import { ScopeMark } from "@/components/ScopeMark";
 import { AvatarMenu } from "@/components/AvatarMenu";
+import { CreateOrgModal } from "@/components/CreateOrgModal";
 import { useTheme } from "@/hooks/useTheme";
+import { useLastProject } from "@/hooks/useLastProject";
 import { cn } from "@/lib/cn";
 
 export type Crumb = { label: string; to?: string };
@@ -17,7 +19,7 @@ export function AppLayout() {
       <ActivityRail />
       <div className="flex min-w-0 flex-1 flex-col">
         <TopBar crumbs={crumbs} />
-        <div className="flex-1 overflow-y-auto scroll-thin">
+        <div className="min-h-0 flex-1 overflow-y-auto scroll-thin">
           <Outlet context={{ setCrumbs } satisfies LayoutContext} />
         </div>
       </div>
@@ -27,29 +29,89 @@ export function AppLayout() {
 
 function ActivityRail() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const { project } = useLastProject();
+  const [createOrgOpen, setCreateOrgOpen] = useState(false);
+
+  const isDashboard = location.pathname === "/";
+  const isProject = project ? location.pathname === `/projects/${project.id}` : false;
+  const isSearch = project ? location.pathname === `/projects/${project.id}/search` : false;
+
   return (
-    <nav className="flex w-14 flex-col items-center border-r border-hairline bg-panel py-3" aria-label="Primary">
+    <nav className="flex w-52 shrink-0 flex-col border-r border-hairline bg-panel py-3" aria-label="Primary">
       <button
         onClick={() => navigate("/")}
-        className="mb-2 flex size-9 items-center justify-center rounded text-signal transition-colors hover:bg-panel-raised"
-        aria-label="CodeScope home"
+        className="mx-3 mb-3 flex items-center gap-2 rounded px-1.5 py-1 text-signal transition-colors hover:bg-panel-raised"
       >
         <ScopeMark className="size-6" />
+        <span className="text-base font-semibold tracking-tight text-foreground">CodeScope</span>
       </button>
-      <div className="mb-3 h-px w-6 bg-hairline" />
-      <div className="flex flex-1 flex-col items-center gap-1">
-        <button
-          onClick={() => navigate("/")}
-          className="group relative flex size-9 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-panel-raised hover:text-foreground"
-          aria-label="Dashboard"
-        >
-          <LayoutGrid className="size-[18px]" />
-          <span className="pointer-events-none absolute left-11 z-30 hidden whitespace-nowrap rounded border border-hairline bg-popover px-2 py-1 text-xs text-popover-foreground group-hover:block">
-            Dashboard
-          </span>
-        </button>
+
+      <div className="flex flex-1 flex-col gap-0.5 px-2">
+        <NavItem icon={LayoutGrid} label="Dashboard" active={isDashboard} onClick={() => navigate("/")} />
+
+        <NavItem
+          icon={FolderGit2}
+          label={project ? project.name : "Project"}
+          hint={project ? undefined : "Open a project first"}
+          active={isProject}
+          disabled={!project}
+          onClick={() => project && navigate(`/projects/${project.id}`)}
+        />
+
+        <NavItem
+          icon={Search}
+          label="Search"
+          hint={project ? undefined : "Open a project first"}
+          active={isSearch}
+          disabled={!project}
+          onClick={() => project && navigate(`/projects/${project.id}/search`)}
+        />
+
+        <div className="my-2 h-px bg-hairline" />
+
+        <NavItem icon={Plus} label="New organization" onClick={() => setCreateOrgOpen(true)} />
       </div>
+
+      <CreateOrgModal open={createOrgOpen} onClose={() => setCreateOrgOpen(false)} />
     </nav>
+  );
+}
+
+function NavItem({
+  icon: Icon,
+  label,
+  hint,
+  active = false,
+  disabled = false,
+  onClick,
+}: {
+  icon: typeof LayoutGrid;
+  label: string;
+  hint?: string;
+  active?: boolean;
+  disabled?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      title={hint}
+      className={cn(
+        "flex w-full items-center gap-2.5 rounded px-2.5 py-2 text-left text-sm transition-colors",
+        disabled
+          ? "cursor-not-allowed text-muted-foreground/40"
+          : active
+            ? "bg-panel-raised text-signal"
+            : "text-muted-foreground hover:bg-panel-raised hover:text-foreground",
+      )}
+    >
+      <Icon className="size-4 shrink-0" />
+      <span className="min-w-0 flex-1 truncate">{label}</span>
+      {hint && <span className="shrink-0 truncate font-mono text-[10px] text-muted-foreground/70">{hint}</span>}
+    </button>
   );
 }
 

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useParams } from "react-router-dom";
-import { FileCode2, Search as SearchIcon, ScanSearch } from "lucide-react";
+import { FileCode2, Search as SearchIcon, ScanSearch, Loader2, AlertTriangle } from "lucide-react";
 import { useCrumbs } from "@/hooks/useCrumbs";
 import { useProject } from "@/hooks/useProjects";
 import { useSearch } from "@/hooks/useSearch";
@@ -70,21 +70,72 @@ export function SearchPage() {
 
       {hasQuery && isError && <ErrorState message="Search failed. Try again." onRetry={() => refetch()} />}
 
-      {hasQuery && !isLoading && !isError && data && data.results.length === 0 && (
+      {hasQuery && !isLoading && !isError && data && data.status !== "ready" && (
+        <IndexStatusState status={data.status} />
+      )}
+
+      {hasQuery && !isLoading && !isError && data && data.status === "ready" && data.results.length === 0 && (
         <EmptyState
           icon={<FileCode2 className="size-4" />}
           title="No matching files"
-          body="Try a different phrase, or confirm the repository has finished indexing."
+          body="Try a different phrase -- nothing in this repository matched closely enough."
         />
       )}
 
-      {hasQuery && !isLoading && !isError && data && data.results.length > 0 && (
+      {hasQuery && !isLoading && !isError && data && data.status === "ready" && data.results.length > 0 && (
         <div className="flex flex-col gap-2">
           {data.results.map((result) => (
             <SearchResultRow key={result.filepath} filepath={result.filepath} classes={result.classes} functions={result.functions} similarity={result.similarity} />
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Distinguishes "nothing to search yet" (project never synced, or files
+ * are indexed but embeddings haven't caught up yet) from a genuine empty
+ * result set -- previously both looked identical (an empty results
+ * array), which made search on a freshly-created project look broken
+ * rather than just early.
+ */
+function IndexStatusState({ status }: { status: "not_indexed" | "indexing" | "model_unavailable" }) {
+  if (status === "not_indexed") {
+    return (
+      <EmptyState
+        icon={<ScanSearch className="size-4" />}
+        title="This project hasn't been indexed yet"
+        body="Sync the repository from the project page first -- search needs at least one completed index."
+      />
+    );
+  }
+
+  if (status === "model_unavailable") {
+    return (
+      <div className="flex flex-col items-center gap-3 rounded-md border border-hairline bg-panel px-6 py-10 text-center">
+        <AlertTriangle className="size-5 text-[var(--risk-med)]" />
+        <div>
+          <p className="text-sm font-medium text-foreground">Search is temporarily unavailable</p>
+          <p className="mt-1 max-w-sm text-xs text-muted-foreground">
+            The embedding model couldn't load on the server. This is a backend issue, not something wrong with
+            your project -- try again shortly.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col items-center gap-3 rounded-md border border-hairline bg-panel px-6 py-10 text-center">
+      <Loader2 className="size-5 animate-spin text-signal" />
+      <div>
+        <p className="text-sm font-medium text-foreground">Indexing project…</p>
+        <p className="mt-1 max-w-sm text-xs text-muted-foreground">
+          Files are parsed and embeddings are still being generated. This usually takes a minute or two after a
+          sync -- search will start returning results as soon as it's done.
+        </p>
+      </div>
     </div>
   );
 }

@@ -36,6 +36,21 @@ def preload_embedding_model(**kwargs):
     call generate_embedding/generate_embeddings_batch first. Makes the
     ~20-50s model-load cost a predictable one-time startup expense per
     worker process rather than something that randomly shows up mid-task.
+
+    Every prefork child hits this independently -- that's expected (each
+    OS process needs its own copy in memory), not a bug. If it fails here,
+    don't crash the worker process: log it and let the model's own
+    EmbeddingModelUnavailableError surface cleanly from the first task
+    that actually needs it, where it's caught and retried like any other
+    task failure (see workers/indexing_tasks.generate_embeddings).
     """
-    from utils.embeddings import _get_model
-    _get_model()
+    from utils.embeddings import warm_up
+
+    try:
+        warm_up()
+    except Exception as e:  # noqa: BLE001
+        import logging
+
+        logging.getLogger(__name__).error(
+            "Embedding model preload failed at worker startup: %s", e
+        )
