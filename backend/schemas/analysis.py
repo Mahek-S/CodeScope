@@ -33,5 +33,7 @@ class AnalysisDetailSchema(AnalysisSummarySchema):
     transitively_affected: list[str] | None
     similar_past_bugs: dict | None
     suggested_tests: list[str] | None
+    evidence: list[str] | None
+    potential_issues: list[str] | None
     explanation: str | None
     github_comment_id: int | None

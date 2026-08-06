@@ -15,24 +15,12 @@ from workers.analysis_tasks import run_impact_analysis
 router = APIRouter(tags=["analyses"])
 
 
-@router.get(
-    "/projects/{project_id}/analyses",
-    response_model=list[AnalysisSummarySchema],
-)
-def list_analyses(
-    project_id: str,
-    request: Request,
-    db: Session = Depends(get_db),
-):
+@router.get("/projects/{project_id}/analyses",response_model=list[AnalysisSummarySchema],)
+def list_analyses(project_id: str,request: Request,db: Session = Depends(get_db),):
     user = get_current_user(request, db)
     project = get_project_for_user(db=db, project_id=project_id, user_id=user.id)
 
-    return (
-        db.query(Analysis)
-        .filter(Analysis.project_id == project.id)
-        .order_by(Analysis.created_at.desc())
-        .all()
-    )
+    return (db.query(Analysis).filter(Analysis.project_id == project.id).order_by(Analysis.created_at.desc()).all())
 
 
 @router.post("/projects/{project_id}/analyses", status_code=202)
