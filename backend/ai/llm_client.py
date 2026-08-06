@@ -10,6 +10,7 @@ the same pattern utils/embeddings.py uses for sentence-transformers.
 from __future__ import annotations
 
 from config import settings
+import json
 
 
 # "-latest" aliases track the newest snapshot of each model family
@@ -88,24 +89,29 @@ async def _call_openai(system_prompt: str, user_prompt: str) -> str:
 
 def parse_llm_response(raw_text: str) -> tuple[str, list[str]]:
     """
-    Parse the "EXPLANATION: ... / SUGGESTED_TESTS: - ..." format defined
-    in ai/prompts.IMPACT_ANALYSIS_USER_TEMPLATE.
-
-    Falls back to treating the whole response as the explanation, with
-    no suggested tests, if the model didn't follow the format -- a
-    slightly malformed LLM response shouldn't fail the whole analysis.
+    Parse the strict JSON contract from IMPACT_ANALYSIS_SYSTEM_PROMPT.
+    Falls back to a minimal shape if the model didn't return valid JSON --
+    a malformed response degrades the analysis rather than failing it,
+    same policy as every other LLM failure mode here.
     """
+    empty = {"risk_summary": "", "evidence": [], "potential_issues": [], "suggested_tests": []}
     if not raw_text:
-        return "", []
+        return empty
 
-    if "SUGGESTED_TESTS:" in raw_text:
-        explanation_part, tests_part = raw_text.split("SUGGESTED_TESTS:", 1)
-        explanation = explanation_part.replace("EXPLANATION:", "").strip()
-        suggested_tests = [
-            line.strip().lstrip("-").strip()
-            for line in tests_part.strip().splitlines()
-            if line.strip().startswith("-")
-        ]
-        return explanation, suggested_tests
+    text = raw_text.strip()
+    if text.startswith("```"):
+        text = text.strip("`")
+        text = text.split("\n", 1)[1] if "\n" in text else text
+        text = text.rsplit("```", 1)[0] if "```" in text else text
 
-    return raw_text.replace("EXPLANATION:", "").strip(), []
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError:
+        return {**empty, "risk_summary": raw_text.strip()[:500]}
+
+    return {
+        "risk_summary": str(data.get("risk_summary", "")),
+        "evidence": [str(x) for x in data.get("evidence", []) if x],
+        "potential_issues": [str(x) for x in data.get("potential_issues", []) if x],
+        "suggested_tests": [str(x) for x in data.get("suggested_tests", []) if x],
+    }

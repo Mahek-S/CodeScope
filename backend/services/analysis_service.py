@@ -128,6 +128,8 @@ def trigger_analysis(
         "comment_markdown": "",
         "github_comment_id": None,
         "raw_llm_output": "",
+        "evidence": [],
+        "potential_issues": [],
     }
 
     final_state = asyncio.run(impact_analysis_graph.ainvoke(initial_state))
@@ -145,10 +147,12 @@ def trigger_analysis(
         transitively_affected=final_state["transitively_affected"],
         similar_past_bugs={"items": final_state["similar_bugs"]},
         suggested_tests=final_state["suggested_tests"],
+        evidence=final_state["evidence"],
+        potential_issues=final_state["potential_issues"],
         risk_score=final_state["risk_score"],
         risk_level=final_state["risk_level"],
         explanation=final_state["explanation"],
-        raw_llm_output=final_state["raw_llm_output"],
+        raw_llm_output=(final_state["raw_llm_output"] or "")[:4000],
         github_comment_id=final_state.get("github_comment_id"),
     )
     db.add(analysis)

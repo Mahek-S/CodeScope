@@ -15,11 +15,18 @@ export function useProjects(orgId: string | undefined) {
   });
 }
 
-export function useProject(projectId: string | undefined) {
+export function useProject(
+  projectId: string | undefined,
+  // Passed true while a sync is in flight (see pages/Project.tsx) so the
+  // page notices indexed_at changing and can drop the "syncing…" banner
+  // on its own, instead of it being stuck until the user refreshes.
+  options?: { poll?: boolean },
+) {
   return useQuery({
     queryKey: projectKeys.detail(projectId ?? ""),
     queryFn: () => projectsApi.get(projectId!),
     enabled: Boolean(projectId),
+    refetchInterval: options?.poll ? 5_000 : false,
   });
 }
 

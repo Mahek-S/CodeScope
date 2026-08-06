@@ -12,6 +12,13 @@ export type SimilarPastBug = {
     created_at: string | null;
 };
 
+export type ProjectSummary = {
+    id: string;
+    name: string;
+    repo_full_name: string;
+    org_id: string;
+};
+
 // GET /projects/{project_id}/analyses -- list view (AnalysisSummarySchema)
 export type AnalysisSummary = {
     id: string;
@@ -24,12 +31,14 @@ export type AnalysisSummary = {
 
 // GET /analyses/{analysis_id} -- detail view (AnalysisDetailSchema)
 export type AnalysisDetail = AnalysisSummary & {
+    project: ProjectSummary;
     changed_files: string[] | null;
     directly_affected: string[] | null;
     transitively_affected: string[] | null;
-    // Persisted as {"items": [...]} by services/analysis_service.py
     similar_past_bugs: { items: SimilarPastBug[] } | null;
     suggested_tests: string[] | null;
+    evidence: string[] | null;
+    potential_issues: string[] | null;
     explanation: string | null;
     github_comment_id: number | null;
 };

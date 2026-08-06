@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   FolderGit2,
@@ -8,10 +8,12 @@ import {
   Search as SearchIcon,
   Play,
   GitPullRequest,
+  CheckCircle2,
 } from "lucide-react";
 import { useProject, useSyncProject } from "@/hooks/useProjects";
 import { useAnalyses } from "@/hooks/useAnalyses";
 import { useCrumbs } from "@/hooks/useCrumbs";
+import { useLastProject } from "@/hooks/useLastProject";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
@@ -20,16 +22,67 @@ import { RiskTag } from "@/components/RiskTag";
 import { RunAnalysisModal } from "@/components/RunAnalysisModal";
 import { relativeTime } from "@/lib/relativeTime";
 import type { RiskLevel } from "@/types/analysis";
+import { RepositoryTabs } from "@/components/RepositoryTabs";
+
+type SyncBanner = "idle" | "indexing" | "done";
 
 export function ProjectPage() {
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
-  const { data: project, isLoading: projectLoading, isError: projectError, refetch: refetchProject } = useProject(projectId);
+
+  // syncBanner drives both the "still indexing" polling AND the banner
+  // text below -- previously the banner was tied to syncProject.isSuccess,
+  // which only reflects "the sync request was accepted" and never resets,
+  // so it kept saying "indexing…" long after indexing had actually
+  // finished. Now it's cleared the moment we actually observe
+  // indexed_at move past the timestamp it had when sync was clicked.
+  const [syncBanner, setSyncBanner] = useState<SyncBanner>("idle");
+  const preSyncIndexedAt = useRef<string | null>(null);
+
+  const {
+    data: project,
+    isLoading: projectLoading,
+    isError: projectError,
+    refetch: refetchProject,
+  } = useProject(projectId, { poll: syncBanner === "indexing" });
   const { data: analyses, isLoading: analysesLoading, isError: analysesError, refetch: refetchAnalyses } = useAnalyses(projectId);
   const syncProject = useSyncProject(projectId ?? "");
   const [runAnalysisOpen, setRunAnalysisOpen] = useState(false);
+  const { setProject: setLastProject } = useLastProject();
 
-  useCrumbs([{ label: "Dashboard", to: "/" }, { label: project?.name ?? "Project" }]);
+  useCrumbs([
+    { label: "Dashboard", to: "/" },
+    {
+      label: "Repositories",
+      to: project ? `/orgs/${project.org_id}/projects` : undefined,
+    },
+    {
+      label: project?.name ?? "Repository",
+    },
+  ]);
+
+  useEffect(() => {
+    if (project) setLastProject({ id: project.id, name: project.name });
+    // setLastProject is stable (useCallback), only re-run when the project changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project]);
+
+  // Detect real completion: once indexed_at advances past whatever it was
+  // right before we clicked Sync, indexing has actually finished.
+  useEffect(() => {
+    if (syncBanner !== "indexing" || !project) return;
+    if (project.indexed_at && project.indexed_at !== preSyncIndexedAt.current) {
+      setSyncBanner("done");
+      const timer = setTimeout(() => setSyncBanner("idle"), 4_000);
+      return () => clearTimeout(timer);
+    }
+  }, [project, syncBanner]);
+
+  function handleSync() {
+    preSyncIndexedAt.current = project?.indexed_at ?? null;
+    setSyncBanner("indexing");
+    syncProject.mutate();
+  }
 
   if (!projectId) return null;
 
@@ -74,14 +127,15 @@ export function ProjectPage() {
         <div className="ml-auto flex items-center gap-2">
           <Button
             variant="secondary"
-            icon={<RefreshCw className={syncProject.isPending ? "size-3.5 animate-spin" : "size-3.5"} />}
-            disabled={syncProject.isPending}
-            onClick={() => syncProject.mutate()}
+            icon={<RefreshCw className={syncBanner === "indexing" ? "size-3.5 animate-spin" : "size-3.5"} />}
+            disabled={syncBanner === "indexing"}
+            onClick={handleSync}
           >
-            {syncProject.isPending ? "Syncing…" : "Sync now"}
+
+            {syncBanner === "indexing" ? "Syncing…" : "Sync now"}
           </Button>
           <Button variant="secondary" icon={<SearchIcon className="size-3.5" />} onClick={() => navigate(`/projects/${projectId}/search`)}>
-            Search code
+            Code Search
           </Button>
           <Button icon={<Play className="size-3.5" />} onClick={() => setRunAnalysisOpen(true)}>
             Run analysis
@@ -89,9 +143,18 @@ export function ProjectPage() {
         </div>
       </div>
 
-      {syncProject.isSuccess && (
-        <p className="mb-4 rounded border border-hairline bg-panel px-3 py-2 text-xs text-muted-foreground">
-          Indexing started in the background. This page will reflect the new dependency graph once it finishes.
+      <RepositoryTabs projectId={projectId} />
+      {syncBanner === "indexing" && (
+        <p className="mb-4 flex items-center gap-2 rounded border border-hairline bg-panel px-3 py-2 text-xs text-muted-foreground">
+          <RefreshCw className="size-3.5 shrink-0 animate-spin text-signal" />
+          Indexing in progress -- parsing files, building the dependency graph, and generating embeddings. This
+          page updates automatically once it's done.
+        </p>
+      )}
+      {syncBanner === "done" && (
+        <p className="mb-4 flex items-center gap-2 rounded border border-hairline bg-panel px-3 py-2 text-xs text-[var(--risk-low)]">
+          <CheckCircle2 className="size-3.5 shrink-0" />
+          Indexing complete -- search and dependency data are up to date.
         </p>
       )}
 

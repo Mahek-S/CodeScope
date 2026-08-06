@@ -39,7 +39,6 @@ CORE_MODULE_MARKERS = {
     "auth.py",
     "settings.py",
     "celery_app.py",
-    "__init__.py",
     "core/",
     "shared/",
     "common/",

@@ -18,6 +18,23 @@ async def lifespan(app: FastAPI):
     logger.info("Starting CodeScope backend…")
     create_tables()
     logger.info("Database tables created / verified.")
+
+    # Load the embedding model once, now, instead of lazily on whichever
+    # search request happens to hit this process first. Mirrors the
+    # Celery-side preload in workers/celery_app.py::preload_embedding_model
+    # -- same reasoning: a predictable one-time startup cost beats a
+    # surprise cost (and possible failure) inside a request handler.
+    # Non-fatal if it fails: search/analysis endpoints degrade to an
+    # "indexing"/unavailable response rather than crashing, and this
+    # avoids the API being unable to start at all just because the model
+    # can't load (e.g. no network on first-ever run, disk full, ...).
+    from utils.embeddings import warm_up
+
+    try:
+        warm_up()
+    except Exception as e:
+        logger.error("Embedding model preload failed at API startup: %s", e)
+
     yield
 
 app = FastAPI(

@@ -1,3 +1,6 @@
+// Mirrors backend/services/search_service.py's STATUS_* constants
+export type IndexStatus = "not_indexed" | "indexing" | "model_unavailable" | "ready";
+
 // Mirrors the dict shape returned by backend/services/search_service.py::search_files
 export type SearchResult = {
     filepath: string;
@@ -11,4 +14,5 @@ export type SearchResult = {
 export type SearchResponse = {
     query: string;
     results: SearchResult[];
+    status: IndexStatus;
 };

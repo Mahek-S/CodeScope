@@ -8,6 +8,7 @@ from models.user import User
 from schemas.user import CurrentUserSchema
 from config import settings
 import os
+import secrets
 
 router = APIRouter(prefix="/auth/github", tags=["auth"])
 GITHUB_AUTHORIZE_URL = "https://github.com/login/oauth/authorize"
@@ -18,13 +19,18 @@ me_router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 @router.get("")
-def login():
-    params = f"client_id={settings.github_client_id}&scope=repo,user:email"
+def login(request: Request):
+    state = secrets.token_urlsafe(24)
+    request.session["oauth_state"] = state
+    params = f"client_id={settings.github_client_id}&scope=repo,user:email&state={state}"
     return RedirectResponse(f"{GITHUB_AUTHORIZE_URL}?{params}")
 
 
 @router.get("/callback")
-async def callback(request: Request, code: str, db: Session = Depends(get_db)):
+async def callback(request: Request, code: str, state: str, db: Session = Depends(get_db)):
+    if not state or state != request.session.pop("oauth_state", None):
+        raise HTTPException(400, "Invalid OAuth state")
+
     if not code:
         raise HTTPException(400, "Missing OAuth code")
 

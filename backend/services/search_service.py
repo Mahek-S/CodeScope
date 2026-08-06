@@ -6,15 +6,44 @@ The query string is embedded with the same model used to embed files
 in the project using cosine distance. pgvector does the nearest-neighbor
 work in the database -- nothing is loaded into Python to compare by hand.
 """
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from models.file_node import FileNode
-from utils.embeddings import generate_embedding
+from models.project import Project
+from utils.embeddings import EmbeddingModelUnavailableError, generate_embedding
 
 from models.analysis import Analysis
 
 DEFAULT_LIMIT = 10
 MAX_LIMIT = 50
+
+# Mirrors frontend/src/types/search.ts's IndexStatus -- keep in sync.
+STATUS_NOT_INDEXED = "not_indexed"  # sync has never run for this project
+STATUS_INDEXING = "indexing"  # files exist, embeddings still catching up
+STATUS_MODEL_UNAVAILABLE = "model_unavailable"  # embedding model failed to load
+STATUS_READY = "ready"
+
+
+def get_index_status(db: Session, project_id) -> str:
+    """
+    Where a project's search index stands right now, so callers can
+    distinguish "genuinely no results" from "nothing to search yet" --
+    the two look identical as an empty `results` list otherwise, which is
+    exactly what made search on a freshly-created project look broken
+    instead of just early.
+    """
+    project = db.query(Project).filter(Project.id == project_id).first()
+
+    total_files, embedded_files = db.query(
+        func.count(FileNode.id),
+        func.count(FileNode.embedding),
+    ).filter(FileNode.project_id == project_id).one()
+
+    if total_files == 0:
+        return STATUS_READY if (project and project.indexed_at) else STATUS_NOT_INDEXED
+
+    return STATUS_READY if embedded_files >= total_files else STATUS_INDEXING
 
 
 def search_files(
@@ -30,14 +59,20 @@ def search_files(
     Files that haven't been embedded yet (embedding IS NULL -- e.g. the
     embedding task hasn't run since the last index) are excluded rather
     than erroring, since a partially-embedded project is a normal state
-    right after a push.
+    right after a push -- callers should check get_index_status()
+    separately to tell "partially indexed" apart from "no matches".
+
+    Raises EmbeddingModelUnavailableError if the embedding model itself
+    failed to load -- callers (routers/search.py) catch this and return
+    a clean status instead of a 500; it is intentionally NOT swallowed
+    here, so it isn't silently confused with "no results".
     """
     query = query.strip()
     if not query:
         return []
 
     limit = max(1, min(limit, MAX_LIMIT))
-    query_vector = generate_embedding(query)
+    query_vector = generate_embedding(query)  # may raise EmbeddingModelUnavailableError
 
     distance = FileNode.embedding.cosine_distance(query_vector)
 

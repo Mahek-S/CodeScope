@@ -16,7 +16,11 @@ export function ProjectsPage() {
   const { data: orgs } = useOrgs();
   const org = orgs?.find((o) => o.id === orgId);
 
-  useCrumbs([{ label: "Dashboard", to: "/" }, { label: org?.name ?? "Projects" }]);
+  useCrumbs([
+    { label: "Dashboard", to: "/" },
+    { label: org?.name ?? "Organization" },
+    { label: "Repositories" },
+  ]);
 
   const { data: projects, isLoading, isError, refetch } = useProjects(orgId);
   const [connectOpen, setConnectOpen] = useState(false);
@@ -27,8 +31,8 @@ export function ProjectsPage() {
     <div className="mx-auto max-w-5xl px-6 py-8">
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-lg font-semibold tracking-tight">{org?.name ?? "Projects"}</h1>
-          <p className="mt-0.5 text-sm text-muted-foreground">Repositories connected to this organization.</p>
+          <h1 className="text-lg font-semibold tracking-tight">Repositories</h1>
+          <p className="mt-0.5 text-sm text-muted-foreground">{org?.name ?? "Organization"}</p>
         </div>
         <Button icon={<Plus className="size-4" />} onClick={() => setConnectOpen(true)}>
           Connect repository
@@ -37,7 +41,7 @@ export function ProjectsPage() {
 
       {isLoading && <CardSkeletonGrid />}
 
-      {isError && <ErrorState message="Couldn't load projects for this organization." onRetry={() => refetch()} />}
+      {isError && <ErrorState message="Couldn't load repositories for this organization." onRetry={() => refetch()} />}
 
       {!isLoading && !isError && projects && projects.length === 0 && (
         <EmptyState
