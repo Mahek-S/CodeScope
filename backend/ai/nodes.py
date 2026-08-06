@@ -23,6 +23,10 @@ from services import graph_service, risk_service, search_service
 from models.project import Project
 from services.github_service import GitHubService
 from services.indexing_service import get_repo_access_token
+from pathlib import Path
+
+GRAPH_ANALYZED_EXTENSIONS = {".py"}
+
 
 logger = logging.getLogger(__name__)
 
@@ -128,16 +132,21 @@ async def llm_reasoning(state: ImpactAnalysisState) -> ImpactAnalysisState:
     change and is explicitly instructed not to override the score (see
     ai/prompts.IMPACT_ANALYSIS_SYSTEM_PROMPT).
     """
+    graph_changed = [f for f in state["changed_files"] if Path(f).suffix in GRAPH_ANALYZED_EXTENSIONS]
+    other_changed = [f for f in state["changed_files"] if Path(f).suffix not in GRAPH_ANALYZED_EXTENSIONS]
+
     prompt = IMPACT_ANALYSIS_USER_TEMPLATE.format(
     pr_number=state.get("pr_number", "-"),
     risk_level=state["risk_level"],
     risk_score=state["risk_score"],
-    changed_count=len(state["changed_files"]),
+    graph_changed_count=len(graph_changed),
+    graph_changed_files=_bullet_list(graph_changed),
     direct_count=len(state["directly_affected"]),
-    transitive_count=len(state["transitively_affected"]),
-    changed_files=_bullet_list(state["changed_files"]),
     directly_affected=_bullet_list(state["directly_affected"]),
+    transitive_count=len(state["transitively_affected"]),
     transitively_affected=_bullet_list(state["transitively_affected"]),
+    other_count=len(other_changed),
+    other_changed_files=_bullet_list(other_changed) or "(none)",
     similar_bugs=_format_similar_bugs(state["similar_bugs"]),
 )
 
