@@ -33,7 +33,8 @@ class Analysis(Base):
     transitively_affected: Mapped[list[str] | None] = mapped_column(ARRAY(Text), nullable=True)
     similar_past_bugs: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     suggested_tests: Mapped[list[str] | None] = mapped_column(ARRAY(Text), nullable=True)
-
+    evidence: Mapped[list[str] | None] = mapped_column(ARRAY(Text), nullable=True)
+    potential_issues: Mapped[list[str] | None] = mapped_column(ARRAY(Text), nullable=True)
     # Risk — deterministic score, then LLM-explained
     risk_score: Mapped[float | None] = mapped_column(Numeric, nullable=True)
     risk_level: Mapped[str | None] = mapped_column(Text, nullable=True)  # 'low' | 'medium' | 'high'

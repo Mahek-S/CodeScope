@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useParams } from "react-router-dom";
-import { FileCode2, Search as SearchIcon, ScanSearch, Loader2, AlertTriangle } from "lucide-react";
+import { FolderGit2, Search as SearchIcon, ScanSearch, Loader2, AlertTriangle } from "lucide-react";
 import { useCrumbs } from "@/hooks/useCrumbs";
 import { useProject } from "@/hooks/useProjects";
 import { useSearch } from "@/hooks/useSearch";
@@ -8,6 +8,7 @@ import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { RepositoryTabs } from "@/components/RepositoryTabs";
 import { cn } from "@/lib/cn";
 
 export function SearchPage() {
@@ -18,7 +19,14 @@ export function SearchPage() {
 
   useCrumbs([
     { label: "Dashboard", to: "/" },
-    { label: project?.name ?? "Project", to: projectId ? `/projects/${projectId}` : undefined },
+    {
+      label: "Repositories",
+      to: `/orgs/${project.org_id}/projects`,
+    },
+    {
+      label: project.name,
+      to: `/projects/${project.id}`,
+    },
     { label: "Search" },
   ]);
 
@@ -28,14 +36,33 @@ export function SearchPage() {
 
   return (
     <div className="mx-auto max-w-3xl px-6 py-8">
-      <div className="mb-6">
-        <h1 className="text-lg font-semibold tracking-tight">Semantic search</h1>
-        <p className="mt-0.5 text-sm text-muted-foreground">
-          Search {project?.name ?? "this repository"} by meaning, not just filename -- e.g. "payment processing" or
-          "retry logic".
+      <div className="mb-6 rounded-md border border-hairline bg-panel px-4 py-3.5">
+        <div className="flex items-center gap-2.5">
+          <span className="flex size-9 items-center justify-center rounded border border-hairline bg-panel-raised text-muted-foreground">
+            <FolderGit2 className="size-4" />
+          </span>
+
+          <div>
+            <p className="text-sm font-medium text-foreground">
+              {project?.name}
+            </p>
+
+            <p className="font-mono text-[11px] text-muted-foreground">
+              {project?.repo_full_name}
+            </p>
+          </div>
+        </div>
+      </div>
+      <RepositoryTabs projectId={projectId!} />
+      <div className="mb-5">
+        <h2 className="text-base font-semibold text-foreground">
+          Code Search
+        </h2>
+
+        <p className="mt-1 text-sm text-muted-foreground">
+          Search this repository using semantic similarity.
         </p>
       </div>
-
       <div className="relative mb-6">
         <SearchIcon className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
         <input
@@ -76,7 +103,7 @@ export function SearchPage() {
 
       {hasQuery && !isLoading && !isError && data && data.status === "ready" && data.results.length === 0 && (
         <EmptyState
-          icon={<FileCode2 className="size-4" />}
+          icon={<FolderGit2 className="size-4" />}
           title="No matching files"
           body="Try a different phrase -- nothing in this repository matched closely enough."
         />
@@ -160,7 +187,7 @@ function SearchResultRow({
     <div className="rounded-md border border-hairline bg-panel p-3.5">
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-start gap-2.5">
-          <FileCode2 className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+          <FolderGit2 className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
           <div className="min-w-0">
             <p className="truncate font-mono text-sm">
               <span className="text-muted-foreground">{dir}</span>

@@ -3,6 +3,7 @@ import uuid
 from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
+from schemas.project import ProjectSummarySchema
 
 
 class AnalysisTriggerSchema(BaseModel):
@@ -26,7 +27,7 @@ class AnalysisSummarySchema(BaseModel):
 
 class AnalysisDetailSchema(AnalysisSummarySchema):
     """Full shape used in single-analysis detail views."""
-
+    project: ProjectSummarySchema
     changed_files: list[str] | None
     directly_affected: list[str] | None
     transitively_affected: list[str] | None

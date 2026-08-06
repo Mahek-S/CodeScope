@@ -26,8 +26,14 @@ export function AnalysisPage() {
   const { analysisId } = useParams<{ analysisId: string }>();
   const navigate = useNavigate();
   const { data: analysis, isLoading, isError, refetch } = useAnalysis(analysisId);
+  const project = analysis?.project;
 
-  useCrumbs([{ label: "Dashboard", to: "/" }, { label: analysis ? `PR #${analysis.pr_number ?? "—"}` : "Analysis" }]);
+  useCrumbs([
+    { label: "Dashboard", to: "/" },
+    { label: "Repositories", to: project ? `/orgs/${project.org_id}/projects` : undefined },
+    { label: project?.name ?? "Repository", to: project ? `/projects/${project.id}` : undefined },
+    { label: "Analysis" },
+  ]);
 
   const [selected, setSelected] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(true);
@@ -60,30 +66,37 @@ export function AnalysisPage() {
     <div className="flex h-full min-h-0 flex-1 flex-col">
       {/* PR context strip -- everything about the PR itself lives here,
           one line, so nothing below needs to repeat it. */}
-      <div className="flex shrink-0 items-center gap-3 border-b border-hairline bg-panel px-4 py-3">
+
+
+      <div className="flex h-11 shrink-0 items-center gap-2 border-b border-hairline bg-panel px-3">
         <button
-          onClick={() => navigate(-1)}
-          className="flex size-7 items-center justify-center rounded text-muted-foreground hover:bg-panel-raised hover:text-foreground"
+          onClick={() => {
+            if (project) {
+              navigate(`/projects/${project.id}`);
+            }
+          }}
+          className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-panel-raised hover:text-foreground"
           aria-label="Back"
         >
           <ArrowLeft className="size-4" />
         </button>
-        <GitPullRequest className="size-4 text-signal" />
-        <span className="text-sm font-medium text-foreground">PR #{analysis.pr_number ?? "—"}</span>
+        <div className="flex items-center gap-1 rounded border border-hairline px-2 py-1">
+          <GitPullRequest className="size-3 text-signal" />
+          <span className="font-mono text-[11px] font-medium">
+            #{analysis.pr_number ?? "—"}
+          </span>
+        </div>
         <span className="hidden font-mono text-[11px] text-muted-foreground sm:inline">
           {analysis.trigger === "pr_opened" ? "auto" : "manual"} · {relativeTime(analysis.created_at)}
         </span>
         <div className="ml-auto flex items-center gap-4">
-          <div className="hidden items-center gap-4 font-mono text-[11px] text-muted-foreground md:flex">
-            <span>{changedFiles.length} changed</span>
-            <span>{directlyAffected.length} direct</span>
-            <span>{transitivelyAffected.length} transitive</span>
-          </div>
+          <span className="font-mono text-[11px] text-muted-foreground">
+            {relativeTime(analysis.created_at)}
+          </span>
           {analysis.risk_level && (
             <RiskTag
               risk={analysis.risk_level as RiskLevel}
-              label={`${analysis.risk_level} risk${analysis.risk_score !== null ? ` · ${Math.round(analysis.risk_score * 100)}/100` : ""
-                }`}
+              label={analysis.risk_level}
             />
           )}
         </div>
@@ -92,10 +105,17 @@ export function AnalysisPage() {
       <div className="flex min-h-0 flex-1">
         {/* LEFT RAIL -- one continuous file list, grouped by distance
             from the change instead of three separately-chromed panels. */}
-        <aside className="hidden w-64 shrink-0 flex-col overflow-auto border-r border-hairline bg-panel scroll-thin lg:flex">
+        <aside className="hidden w-56 shrink-0 flex-col overflow-auto border-r border-hairline bg-panel scroll-thin lg:flex">
           <FileGroup title="Changed" count={changedFiles.length} files={changedFiles} selected={selected} onSelect={setSelected} accent="text-signal" />
           <FileGroup title="Directly affected" count={directlyAffected.length} files={directlyAffected} selected={selected} onSelect={setSelected} accent="text-[var(--risk-med)]" />
-          <FileGroup title="Transitively affected" count={transitivelyAffected.length} files={transitivelyAffected} selected={selected} onSelect={setSelected} accent="text-muted-foreground" />
+          <FileGroup
+            title="Transitively affected"
+            count={transitivelyAffected.length}
+            files={transitivelyAffected}
+            selected={selected}
+            onSelect={setSelected}
+            accent="text-[var(--risk-low)]"
+          />
         </aside>
 
         {/* CENTER -- graph + evidence drawer */}
@@ -135,8 +155,8 @@ export function AnalysisPage() {
                   <DrawerTabButton icon={FlaskConical} label="Suggested tests" count={suggestedTests.length} active={drawerTab === "tests"} onClick={() => setDrawerTab("tests")} />
                   <DrawerTabButton icon={History} label="Similar past bugs" count={similarBugs.length} active={drawerTab === "similar"} onClick={() => setDrawerTab("similar")} />
                 </div>
-                <div className="h-56 overflow-auto scroll-thin">
-                  {drawerTab === "explanation" && <ExplanationPanel text={analysis.explanation} />}
+                <div className="h-46 overflow-auto">
+                  {drawerTab === "explanation" && <ExplanationPanel text={analysis.explanation} evidence={analysis.evidence ?? []} issues={analysis.potential_issues ?? []} />}
                   {drawerTab === "tests" && <TestsPanel tests={suggestedTests} />}
                   {drawerTab === "similar" && (
                     <SimilarBugsPanel bugs={similarBugs} onOpen={(id) => navigate(`/analyses/${id}`)} />
@@ -231,10 +251,31 @@ function DrawerTabButton({
   );
 }
 
-function ExplanationPanel({ text }: { text: string | null }) {
-  if (!text) return <EmptyEvidence text="No explanation available for this analysis." />;
-  return <p className="px-5 py-4 text-sm leading-relaxed text-foreground">{text}</p>;
+function ExplanationPanel({ text, evidence, issues }: { text: string | null; evidence: string[]; issues: string[] }) {
+  if (!text && evidence.length === 0) return <EmptyEvidence text="No explanation available for this analysis." />;
+  return (
+    <div className="px-5 py-4 text-sm leading-relaxed text-foreground space-y-4">
+      {text && <p>{text}</p>}
+      {evidence.length > 0 && (
+        <div>
+          <p className="mb-1.5 font-mono text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Evidence</p>
+          <ul className="space-y-1">
+            {evidence.map((e, i) => <li key={i} className="flex gap-2"><span className="text-[var(--risk-low)]">✓</span>{e}</li>)}
+          </ul>
+        </div>
+      )}
+      {issues.length > 0 && (
+        <div>
+          <p className="mb-1.5 font-mono text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Potential Issues</p>
+          <ul className="space-y-1">
+            {issues.map((e, i) => <li key={i} className="flex gap-2"><span className="text-[var(--risk-med)]">⚠</span>{e}</li>)}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
 }
+
 
 function TestsPanel({ tests }: { tests: string[] }) {
   if (tests.length === 0) return <EmptyEvidence text="No suggested tests for this change." />;

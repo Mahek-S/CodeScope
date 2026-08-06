@@ -1,22 +1,23 @@
 import { useState } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
-import { LayoutGrid, Moon, Sun, FolderGit2, Search, Plus } from "lucide-react";
+import { LayoutGrid, Moon, Sun } from "lucide-react";
 import { ScopeMark } from "@/components/ScopeMark";
 import { AvatarMenu } from "@/components/AvatarMenu";
-import { CreateOrgModal } from "@/components/CreateOrgModal";
 import { useTheme } from "@/hooks/useTheme";
-import { useLastProject } from "@/hooks/useLastProject";
 import { cn } from "@/lib/cn";
+import { PanelLeft } from "lucide-react";
 
 export type Crumb = { label: string; to?: string };
 export type LayoutContext = { setCrumbs: (crumbs: Crumb[]) => void };
 
 export function AppLayout() {
   const [crumbs, setCrumbs] = useState<Crumb[]>([]);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
 
   return (
     <div className="flex h-screen min-h-[560px] overflow-hidden bg-background text-foreground">
-      <ActivityRail />
+      <ActivityRail open={sidebarOpen}
+        onToggle={() => setSidebarOpen((v) => !v)} />
       <div className="flex min-w-0 flex-1 flex-col">
         <TopBar crumbs={crumbs} />
         <div className="min-h-0 flex-1 overflow-y-auto scroll-thin">
@@ -27,53 +28,59 @@ export function AppLayout() {
   );
 }
 
-function ActivityRail() {
+function ActivityRail({ open, onToggle, }: {
+  open: boolean;
+  onToggle: () => void;
+}) {
   const navigate = useNavigate();
   const location = useLocation();
-  const { project } = useLastProject();
-  const [createOrgOpen, setCreateOrgOpen] = useState(false);
 
   const isDashboard = location.pathname === "/";
-  const isProject = project ? location.pathname === `/projects/${project.id}` : false;
-  const isSearch = project ? location.pathname === `/projects/${project.id}/search` : false;
 
   return (
-    <nav className="flex w-52 shrink-0 flex-col border-r border-hairline bg-panel py-3" aria-label="Primary">
-      <button
-        onClick={() => navigate("/")}
-        className="mx-3 mb-3 flex items-center gap-2 rounded px-1.5 py-1 text-signal transition-colors hover:bg-panel-raised"
-      >
-        <ScopeMark className="size-6" />
-        <span className="text-base font-semibold tracking-tight text-foreground">CodeScope</span>
-      </button>
+    <nav
+      className={cn(
+        "flex shrink-0 flex-col border-r border-hairline bg-panel py-3 transition-[width] duration-200 ease-in-out",
+        open ? "w-52" : "w-14"
+      )}
+      aria-label="Primary"
+    >
 
-      <div className="flex flex-1 flex-col gap-0.5 px-2">
-        <NavItem icon={LayoutGrid} label="Dashboard" active={isDashboard} onClick={() => navigate("/")} />
+      <div className={cn(
+        "mb-4 flex items-center",
+        open ? "mx-3 gap-2" : "justify-center"
+      )}>
+        <button
+          onClick={onToggle}
+          className="flex h-8 w-8 items-center justify-center rounded hover:bg-panel-raised"
+        >
+          <PanelLeft className="size-4" />
+        </button>
 
-        <NavItem
-          icon={FolderGit2}
-          label={project ? project.name : "Project"}
-          hint={project ? undefined : "Open a project first"}
-          active={isProject}
-          disabled={!project}
-          onClick={() => project && navigate(`/projects/${project.id}`)}
-        />
+        <button
+          onClick={() => navigate("/")}
+          className="flex items-center gap-2 rounded px-1 py-1 hover:bg-panel-raised"
+        >
+          <ScopeMark className="size-6" />
 
-        <NavItem
-          icon={Search}
-          label="Search"
-          hint={project ? undefined : "Open a project first"}
-          active={isSearch}
-          disabled={!project}
-          onClick={() => project && navigate(`/projects/${project.id}/search`)}
-        />
-
-        <div className="my-2 h-px bg-hairline" />
-
-        <NavItem icon={Plus} label="New organization" onClick={() => setCreateOrgOpen(true)} />
+          {open && (
+            <span className="text-base font-semibold tracking-tight text-foreground">
+              CodeScope
+            </span>
+          )}
+        </button>
       </div>
 
-      <CreateOrgModal open={createOrgOpen} onClose={() => setCreateOrgOpen(false)} />
+      <div className="flex flex-1 flex-col gap-0.5 px-2">
+        <NavItem
+          icon={LayoutGrid}
+          label="Dashboard"
+          open={open}
+          active={isDashboard}
+          onClick={() => navigate("/")}
+        />
+
+      </div>
     </nav>
   );
 }
@@ -81,6 +88,7 @@ function ActivityRail() {
 function NavItem({
   icon: Icon,
   label,
+  open,
   hint,
   active = false,
   disabled = false,
@@ -88,6 +96,7 @@ function NavItem({
 }: {
   icon: typeof LayoutGrid;
   label: string;
+  open: boolean;
   hint?: string;
   active?: boolean;
   disabled?: boolean;
@@ -100,7 +109,8 @@ function NavItem({
       disabled={disabled}
       title={hint}
       className={cn(
-        "flex w-full items-center gap-2.5 rounded px-2.5 py-2 text-left text-sm transition-colors",
+        "flex w-full items-center rounded px-2.5 py-2 text-left text-sm transition-colors",
+        open ? "gap-2.5" : "justify-center",
         disabled
           ? "cursor-not-allowed text-muted-foreground/40"
           : active
@@ -109,7 +119,11 @@ function NavItem({
       )}
     >
       <Icon className="size-4 shrink-0" />
-      <span className="min-w-0 flex-1 truncate">{label}</span>
+      {open && (
+        <span className="min-w-0 flex-1 truncate">
+          {label}
+        </span>
+      )}
       {hint && <span className="shrink-0 truncate font-mono text-[10px] text-muted-foreground/70">{hint}</span>}
     </button>
   );
@@ -124,7 +138,11 @@ function TopBar({ crumbs }: { crumbs: Crumb[] }) {
       <div className="flex min-w-0 items-center gap-1.5 font-mono text-[13px]">
         {crumbs.map((c, i) => (
           <span key={i} className="flex items-center gap-1.5">
-            {i > 0 && <span className="text-muted-foreground/60">/</span>}
+            {i > 0 && (
+              <span className="text-muted-foreground/60 select-none">
+                &gt;
+              </span>
+            )}
             {c.to ? (
               <button
                 onClick={() => navigate(c.to!)}

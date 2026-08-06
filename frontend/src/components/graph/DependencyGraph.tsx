@@ -1,7 +1,6 @@
 import { useMemo } from "react";
 import { ReactFlow, Background, Controls, BackgroundVariant } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { Crosshair } from "lucide-react";
 import { buildDependencyGraph } from "./layout";
 import { FileFlowNode, HubFlowNode } from "./FileFlowNode";
 
@@ -44,12 +43,6 @@ export function DependencyGraph({
 
     return (
         <div className="relative h-full w-full bg-background">
-            <div className="pointer-events-none absolute left-4 top-4 z-10">
-                <span className="pointer-events-auto inline-flex items-center gap-2 rounded border border-hairline bg-panel/90 px-2.5 py-1 font-mono text-[11px] text-muted-foreground backdrop-blur-sm">
-                    <Crosshair className="size-3.5 text-signal" />
-                    blast radius · changed → direct → transitive
-                </span>
-            </div>
 
             {isEmpty ? (
                 <div className="flex h-full items-center justify-center px-6 text-center font-mono text-[11px] text-muted-foreground">

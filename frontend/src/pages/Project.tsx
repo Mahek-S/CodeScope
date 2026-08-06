@@ -22,6 +22,7 @@ import { RiskTag } from "@/components/RiskTag";
 import { RunAnalysisModal } from "@/components/RunAnalysisModal";
 import { relativeTime } from "@/lib/relativeTime";
 import type { RiskLevel } from "@/types/analysis";
+import { RepositoryTabs } from "@/components/RepositoryTabs";
 
 type SyncBanner = "idle" | "indexing" | "done";
 
@@ -49,7 +50,16 @@ export function ProjectPage() {
   const [runAnalysisOpen, setRunAnalysisOpen] = useState(false);
   const { setProject: setLastProject } = useLastProject();
 
-  useCrumbs([{ label: "Dashboard", to: "/" }, { label: project?.name ?? "Project" }]);
+  useCrumbs([
+    { label: "Dashboard", to: "/" },
+    {
+      label: "Repositories",
+      to: project ? `/orgs/${project.org_id}/projects` : undefined,
+    },
+    {
+      label: project?.name ?? "Repository",
+    },
+  ]);
 
   useEffect(() => {
     if (project) setLastProject({ id: project.id, name: project.name });
@@ -121,10 +131,11 @@ export function ProjectPage() {
             disabled={syncBanner === "indexing"}
             onClick={handleSync}
           >
+
             {syncBanner === "indexing" ? "Syncing…" : "Sync now"}
           </Button>
           <Button variant="secondary" icon={<SearchIcon className="size-3.5" />} onClick={() => navigate(`/projects/${projectId}/search`)}>
-            Search code
+            Code Search
           </Button>
           <Button icon={<Play className="size-3.5" />} onClick={() => setRunAnalysisOpen(true)}>
             Run analysis
@@ -132,6 +143,7 @@ export function ProjectPage() {
         </div>
       </div>
 
+      <RepositoryTabs projectId={projectId} />
       {syncBanner === "indexing" && (
         <p className="mb-4 flex items-center gap-2 rounded border border-hairline bg-panel px-3 py-2 text-xs text-muted-foreground">
           <RefreshCw className="size-3.5 shrink-0 animate-spin text-signal" />

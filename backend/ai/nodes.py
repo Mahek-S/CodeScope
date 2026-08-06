@@ -129,14 +129,17 @@ async def llm_reasoning(state: ImpactAnalysisState) -> ImpactAnalysisState:
     ai/prompts.IMPACT_ANALYSIS_SYSTEM_PROMPT).
     """
     prompt = IMPACT_ANALYSIS_USER_TEMPLATE.format(
-        pr_number=state.get("pr_number", "-"),
-        risk_level=state["risk_level"],
-        risk_score=state["risk_score"],
-        changed_files=_bullet_list(state["changed_files"]),
-        directly_affected=_bullet_list(state["directly_affected"]),
-        transitively_affected=_bullet_list(state["transitively_affected"]),
-        similar_bugs=_format_similar_bugs(state["similar_bugs"]),
-    )
+    pr_number=state.get("pr_number", "-"),
+    risk_level=state["risk_level"],
+    risk_score=state["risk_score"],
+    changed_count=len(state["changed_files"]),
+    direct_count=len(state["directly_affected"]),
+    transitive_count=len(state["transitively_affected"]),
+    changed_files=_bullet_list(state["changed_files"]),
+    directly_affected=_bullet_list(state["directly_affected"]),
+    transitively_affected=_bullet_list(state["transitively_affected"]),
+    similar_bugs=_format_similar_bugs(state["similar_bugs"]),
+)
 
     raw_output = ""
     try:
@@ -154,28 +157,25 @@ async def llm_reasoning(state: ImpactAnalysisState) -> ImpactAnalysisState:
             state["project_id"], state.get("pr_number"), e,
         )
     
-
-    explanation, llm_testing_areas = parse_llm_response(raw_output) 
-    logger.info("Parsed explanation: %s", explanation)
-    logger.info("Testing areas: %s", llm_testing_areas)
+    parsed = parse_llm_response(raw_output)
 
     db = SessionLocal()
     try:
         heuristic_test_files = graph_service.suggest_test_files(
-            db,
-            state["project_id"],
-            state["changed_files"] + state["directly_affected"],
+            db, state["project_id"], state["changed_files"] + state["directly_affected"],
         )
     finally:
         db.close()
 
-    suggested_tests = sorted(set(llm_testing_areas) | set(heuristic_test_files))[:10]
+    suggested_tests = sorted(set(parsed["suggested_tests"]) | set(heuristic_test_files))[:10]
 
     return {
         **state,
-        "explanation": explanation or "No explanation available for this analysis.",
+        "explanation": parsed["risk_summary"] or "No explanation available for this analysis.",
+        "evidence": parsed["evidence"],
+        "potential_issues": parsed["potential_issues"],
         "heuristic_test_files": heuristic_test_files,
-        "llm_testing_areas": llm_testing_areas,
+        "llm_testing_areas": parsed["suggested_tests"],
         "suggested_tests": suggested_tests,
         "raw_llm_output": raw_output,
     }
@@ -248,9 +248,12 @@ def _build_pr_comment_markdown(state: ImpactAnalysisState) -> str:
         "_(inferred from affected modules — verify these exist before relying on them)_",
         _bullet_list(state.get("suggested_tests", [])),
         "",
-        "### Why?",
-        state.get("explanation") or "No explanation available for this analysis.",
     ]
+    lines += ["", "### Evidence"]
+    lines.append(_bullet_list(state.get("evidence") or []))
+    if state.get("potential_issues"):
+        lines += ["", "### Potential Issues"]
+        lines.append(_bullet_list(state["potential_issues"]))
 
     similar_bugs = state.get("similar_bugs") or []
     if similar_bugs:

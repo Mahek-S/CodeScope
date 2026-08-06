@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from database import get_db
 from dependencies.auth import get_current_user
@@ -64,7 +64,12 @@ def get_analysis(
 ):
     user = get_current_user(request, db)
 
-    analysis = db.query(Analysis).filter(Analysis.id == analysis_id).first()
+    analysis = (
+    db.query(Analysis)
+    .options(selectinload(Analysis.project))
+    .filter(Analysis.id == analysis_id)
+    .first()
+)
     if not analysis:
         raise HTTPException(status_code=404, detail="Analysis not found")
 
