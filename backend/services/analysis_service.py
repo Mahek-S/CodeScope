@@ -130,6 +130,7 @@ def trigger_analysis(
         "raw_llm_output": "",
         "evidence": [],
         "potential_issues": [],
+        "risk_factors": [],
     }
 
     final_state = asyncio.run(impact_analysis_graph.ainvoke(initial_state))
@@ -154,6 +155,7 @@ def trigger_analysis(
         explanation=final_state["explanation"],
         raw_llm_output=(final_state["raw_llm_output"] or "")[:4000],
         github_comment_id=final_state.get("github_comment_id"),
+        risk_factors=final_state.get("risk_factors", []),
     )
     db.add(analysis)
     db.commit()

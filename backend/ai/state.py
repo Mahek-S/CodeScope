@@ -27,3 +27,4 @@ class ImpactAnalysisState(TypedDict):
     comment_markdown: str
     github_comment_id: int | None
     raw_llm_output: str
+    risk_factors: list[dict]
