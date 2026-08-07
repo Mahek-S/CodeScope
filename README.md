@@ -1,5 +1,10 @@
 # CodeScope
 
+## Automated PR Impact Analysis for Python Repositories
+
+![Overview](docs/screenshots/Repo_Overview.png)
+
+
 **An engineering workflow platform that continuously understands a Python codebase and automatically analyzes the impact of every pull request — without anyone having to ask.**
 
 ![Status](https://img.shields.io/badge/status-active-brightgreen) ![License](https://img.shields.io/badge/license-MIT-blue) ![Python](https://img.shields.io/badge/python-3.11-blue) ![FastAPI](https://img.shields.io/badge/backend-FastAPI-009688)
@@ -33,21 +38,34 @@ When a PR opens, CodeScope:
 
 ## Demo
 
-> _Add a 60–90s GIF/video here: login → connect repo → PR analysis with risk score + dependency graph → semantic search. This is the single highest-impact thing to add — it makes "proactive, not reactive" tangible instead of a claim._
+See CodeScope automatically analyze a pull request, post a GitHub review comment, visualize dependency impact, and perform semantic search.
+
+▶️ **Watch the Demo:** https://youtu.be/UkRpBOiGCZA
 
 **Screenshots**
+### Authentication
 
-| Dashboard | Analysis — risk & evidence |
-|---|---|
-| _add screenshot_ | _add screenshot_ |
+| GitHub Login | Dashboard |
+|:---------:|:-----------------:|
+| ![](docs/screenshots/Login_Page.png) | ![](docs/screenshots/Dashboard.png) |
 
-| Dependency graph | Semantic search |
-|---|---|
-| _add screenshot_ | _add screenshot_ |
+### Repository Management
 
-| Auto-posted GitHub PR comment |
-|---|
-| _add screenshot_ |
+| Repositories | Analysis Overview |
+|:-------------:|:---------------:|
+| ![](docs/screenshots/Repositories.png) | ![](docs/screenshots/Repo_Overview.png) |
+
+### Code Intelligence
+
+| Analysis History | Semantic Search |
+|:-------------:|:---------------:|
+| ![](docs/screenshots/Analyses.png) | ![](docs/screenshots/Search.png) |
+
+### GitHub Integration
+
+<p align="center">
+  <img src="docs/screenshots/PR_Comment.png" width="900">
+</p>
 
 ---
 

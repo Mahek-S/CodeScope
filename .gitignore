@@ -1,5 +1,6 @@
 # Environment
 .env
+.env.example
 venv/
 .venv/
 
@@ -29,7 +30,11 @@ Thumbs.db
 postgres_data/
 redis_data/
 
+# Node
 node_modules/
 frontend/node_modules/
+
+# Build
 dist/
 build/
+frontend/dist/
