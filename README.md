@@ -132,7 +132,7 @@ React dashboard (history, graph, search)
 | Background jobs | Celery | Indexing and analysis run off the request path |
 | Embeddings | sentence-transformers (`all-MiniLM-L6-v2`, local) | No per-embedding API cost, runs on CPU |
 | AI orchestration | LangGraph | Explicit, inspectable state machine over a single opaque prompt |
-| LLM | Claude API | Structured JSON output for evidence-based explanations |
+| LLM | Gemini API | Structured JSON output for evidence-based explanations |
 | GitHub integration | PyGithub + signed webhooks | Repo access, PR comments, idempotent event handling |
 | Frontend | React + Vite + Tailwind | Fast iteration, small bundle |
 | Auth | GitHub OAuth (Authlib) | Single sign-on, no separate credential store |
