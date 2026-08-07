@@ -41,6 +41,7 @@ export type AnalysisDetail = AnalysisSummary & {
     potential_issues: string[] | null;
     explanation: string | null;
     github_comment_id: number | null;
+    risk_factors: RiskFactor[] | null;
 };
 
 // POST /projects/{project_id}/analyses body (AnalysisTriggerSchema)
@@ -53,3 +54,5 @@ export type TriggerAnalysisResponse = {
     detail: string;
     task_id: string;
 };
+
+export type RiskFactor = { label: string; impact: number; triggered: boolean };

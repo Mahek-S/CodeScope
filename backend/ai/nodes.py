@@ -91,7 +91,14 @@ async def compute_risk_score(state: ImpactAnalysisState) -> ImpactAnalysisState:
         change_frequency=change_frequency,
     )
 
-    return {**state, "risk_score": risk_score, "risk_level": risk_level}
+    risk_factors = risk_service.compute_risk_factors(
+        fan_out=fan_out,
+        core_module_touched=core_module_touched,
+        diff_size=state.get("diff_size", 0),
+        change_frequency=change_frequency,
+    )
+
+    return {**state, "risk_score": risk_score, "risk_level": risk_level, "risk_factors": risk_factors}
 
 
 async def retrieve_similar_bugs(state: ImpactAnalysisState) -> ImpactAnalysisState:

@@ -38,6 +38,7 @@ class Analysis(Base):
     # Risk — deterministic score, then LLM-explained
     risk_score: Mapped[float | None] = mapped_column(Numeric, nullable=True)
     risk_level: Mapped[str | None] = mapped_column(Text, nullable=True)  # 'low' | 'medium' | 'high'
+    risk_factors: Mapped[list | None] = mapped_column(JSONB, nullable=True)
 
     # Output — LLM
     explanation: Mapped[str | None] = mapped_column(Text, nullable=True)

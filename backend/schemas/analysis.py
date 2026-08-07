@@ -37,3 +37,4 @@ class AnalysisDetailSchema(AnalysisSummarySchema):
     potential_issues: list[str] | None
     explanation: str | None
     github_comment_id: int | None
+    risk_factors: list[dict] | None

@@ -19,6 +19,9 @@ import { DependencyGraph } from "@/components/graph/DependencyGraph";
 import { relativeTime } from "@/lib/relativeTime";
 import { cn } from "@/lib/cn";
 import type { RiskLevel } from "@/types/analysis";
+import { RiskFactorsPopover } from "@/components/RiskFactorsPopover";
+import { useRef, useEffect } from "react";
+
 
 type DrawerTab = "explanation" | "tests" | "similar";
 
@@ -38,6 +41,26 @@ export function AnalysisPage() {
   const [selected, setSelected] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(true);
   const [drawerTab, setDrawerTab] = useState<DrawerTab>("explanation");
+  const [riskOpen, setRiskOpen] = useState(false);
+  const riskRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (riskRef.current && !riskRef.current.contains(e.target as Node)) {
+        setRiskOpen(false);
+      }
+    }
+    function handleEscape(e: KeyboardEvent) {
+      if (e.key === "Escape") setRiskOpen(false);
+    }
+    document.addEventListener("mousedown", handleClick);
+    document.addEventListener("keydown", handleEscape);
+    return () => {
+      document.removeEventListener("mousedown", handleClick);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, []);
+
 
   if (isLoading) {
     return (
@@ -63,7 +86,7 @@ export function AnalysisPage() {
   const similarBugs = analysis.similar_past_bugs?.items ?? [];
 
   return (
-    <div className="flex h-full min-h-0 flex-1 flex-col">
+    <div className="relative flex h-full min-h-0 flex-1 flex-col">
       {/* PR context strip -- everything about the PR itself lives here,
           one line, so nothing below needs to repeat it. */}
 
@@ -89,18 +112,25 @@ export function AnalysisPage() {
         <span className="hidden font-mono text-[11px] text-muted-foreground sm:inline">
           {analysis.trigger === "pr_opened" ? "auto" : "manual"} · {relativeTime(analysis.created_at)}
         </span>
-        <div className="ml-auto flex items-center gap-4">
-          <span className="font-mono text-[11px] text-muted-foreground">
-            {relativeTime(analysis.created_at)}
-          </span>
+        <div className="ml-auto flex items-center gap-4" ref={riskRef}>
+          <span className="font-mono text-[11px] text-muted-foreground">{relativeTime(analysis.created_at)}</span>
           {analysis.risk_level && (
             <RiskTag
               risk={analysis.risk_level as RiskLevel}
               label={analysis.risk_level}
+              onClick={() => setRiskOpen((o) => !o)}
+              active={riskOpen}
             />
           )}
         </div>
       </div>
+
+      {riskOpen && analysis.risk_factors && (
+        <RiskFactorsPopover
+          factors={analysis.risk_factors}
+          onClose={() => setRiskOpen(false)}
+        />
+      )}
 
       <div className="flex min-h-0 flex-1">
         {/* LEFT RAIL -- one continuous file list, grouped by distance

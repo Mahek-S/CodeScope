@@ -116,3 +116,39 @@ def compute_risk_score(
         risk_level = "low"
 
     return round(risk_score, 4), risk_level
+
+
+def compute_risk_factors(
+    fan_out: int,
+    core_module_touched: bool,
+    diff_size: int,
+    change_frequency: float,
+) -> list[dict]:
+    """
+    Human-readable breakdown of what drove the risk score, using the same
+    inputs/weights as compute_risk_score. Purely explanatory — does not
+    affect the score itself, only presents it.
+    """
+    factors = [
+        {
+            "label": f"{fan_out} affected file{'s' if fan_out != 1 else ''}",
+            "contribution": round(min(fan_out / FAN_OUT_MAX, 1.0) * WEIGHTS["fan_out"], 4),
+            "triggered": fan_out > 0,
+        },
+        {
+            "label": "Core/infra module touched",
+            "contribution": round((1.0 if core_module_touched else 0.0) * WEIGHTS["core_module"], 4),
+            "triggered": core_module_touched,
+        },
+        {
+            "label": f"Diff size: {diff_size} lines changed",
+            "contribution": round(min(diff_size / DIFF_SIZE_MAX, 1.0) * WEIGHTS["diff_size"], 4),
+            "triggered": diff_size > 0,
+        },
+        {
+            "label": "Frequently-changed files touched",
+            "contribution": round(min(change_frequency, 1.0) * WEIGHTS["change_frequency"], 4),
+            "triggered": change_frequency > 0,
+        },
+    ]
+    return sorted(factors, key=lambda f: f["contribution"], reverse=True)
